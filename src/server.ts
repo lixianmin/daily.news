@@ -1,20 +1,20 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Hono } from "hono";
 import { getConnInfo } from "@hono/bun";
 import { createServerShell, ResponseX } from "@needle/shell";
 import {
   CONSOLE_PASSWORD,
   CONSOLE_SECRET,
   CONSOLE_USER,
+  JWT_SECRET,
   PORT,
   HOSTNAME,
   todayInShanghai,
   formatShanghai,
 } from "./config.ts";
+import { createHono } from "./core/index.ts";
 import { generateDay, type GenerateDayResult } from "./generator.ts";
 import { log, logFiles } from "./log.ts";
-import { requestLogger } from "./middleware.ts";
 import { renderDayPage, renderIndexPage, renderSearchHits } from "./render.ts";
 import { createScheduler, type Scheduler } from "./scheduler.ts";
 import { createStore, type Store } from "./store.ts";
@@ -98,10 +98,8 @@ export async function buildApp(options: ServerOptions = {}) {
       }),
   });
 
-  const app = new Hono();
-
-  // 每个请求都留一条日志（needle）：method / path / status / 耗时 / 客户端地址
-  app.use("*", requestLogger(logger));
+  // 通用骨架：请求日志中间件（每个请求开始/结束各一条 info）+ JWT 中间件
+  const app = createHono({ logger, jwtSecret: JWT_SECRET });
 
 
   // --- 页面 ---

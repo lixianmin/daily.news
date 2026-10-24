@@ -1,6 +1,6 @@
 {
   "name": "daily.news",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "description": "每日热点摘要：抓取多源新闻，结构化落盘，Hono 服务随时翻阅",
@@ -14,7 +14,8 @@
     "@hono/bun": "^1.0.1",
     "@needle/logo": "link:@needle/logo",
     "@needle/shell": "link:@needle/shell",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "ulid": "^3.0.2"
   },
   "devDependencies": {
     "@types/bun": "latest",

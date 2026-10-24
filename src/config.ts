@@ -71,6 +71,14 @@ export const CONSOLE_USER = process.env["CONSOLE_USER"] ?? "";
 export const CONSOLE_PASSWORD = process.env["CONSOLE_PASSWORD"] ?? "";
 export const CONSOLE_SECRET = process.env["CONSOLE_SECRET"] ?? "";
 
+/**
+ * JWT 验签密钥。
+ *
+ * 空串 = 只解不验（core 的 JWT 中间件解出 payload 但不验签，uid 不可信）。
+ * 现在还没有登录、没有签发方，所以默认为空。
+ */
+export const JWT_SECRET = process.env["DAILY_NEWS_JWT_SECRET"] ?? "";
+
 /** 东八区偏移（毫秒）。存储与统计固定用东八区。 */
 const TZ_OFFSET_MS = 8 * 60 * 60 * 1000;
 
