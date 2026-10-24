@@ -32,15 +32,15 @@ function day(date: string, overrides: Partial<DigestDay> = {}): DigestDay {
         title: "GitHub Trending（今日趨勢）",
         kind: "items",
         items: [
-          { title: "owner/repo", url: "https://github.com/owner/repo", en: "A fast CLI for X.", zh: "一個快速的 CLI。" },
-          { title: "other/lib", url: "https://github.com/other/lib", en: "A Python library.", zh: "一個 Python 庫。" },
+          { title: "owner/repo", url: "https://github.com/owner/repo", en: "A fast CLI for X.", zh: "" },
+          { title: "other/lib", url: "https://github.com/other/lib", en: "A Python library.", zh: "" },
         ],
       },
       {
         key: "hackernews",
         title: "Hacker News（過去24小時熱點）",
         kind: "items",
-        items: [{ title: "Show HN: Zed", url: "https://news.ycombinator.com/item?id=1", en: "An editor.", zh: "一個編輯器。" }],
+        items: [{ title: "Show HN: Zed", url: "https://news.ycombinator.com/item?id=1", en: "An editor.", zh: "" }],
       },
     ],
     ...overrides,
@@ -156,15 +156,6 @@ describe("search", () => {
     expect(hits[0]?.title).toBe("other/lib");
   });
 
-  it("匹配繁中摘要", async () => {
-    const store = createStore({ dataDir });
-    await store.writeDay(day("2026-10-23"));
-
-    const hits = await store.search("編輯器");
-    expect(hits).toHaveLength(1);
-    expect(hits[0]?.date).toBe("2026-10-23");
-  });
-
   it("匹配标题且大小写不敏感", async () => {
     const store = createStore({ dataDir });
     await store.writeDay(day("2026-10-23"));
@@ -207,8 +198,8 @@ describe("search", () => {
             categories: [
               {
                 title: "AI Models & Benchmarks",
-                titleZh: "AI 模型與基準",
-                items: [{ en: "@simonw benchmarked Qwen.", zh: "@simonw 測試了 Qwen。", url: "https://x.com/simonw" }],
+                titleZh: "",
+                items: [{ en: "@simonw benchmarked Qwen.", zh: "", url: "https://x.com/simonw" }],
               },
             ],
           },

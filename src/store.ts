@@ -9,7 +9,6 @@ export interface SearchHit {
   section: string;
   title: string;
   en: string;
-  zh: string;
   url?: string;
 }
 
@@ -204,13 +203,12 @@ export function createStore(options: StoreOptions): Store {
           if (section.kind === "items") {
             for (const item of section.items) {
               if (hits.length >= limit) return hits;
-              if (!matches(needle, [item.title, item.en, item.zh])) continue;
+              if (!matches(needle, [item.title, item.en])) continue;
               const hit: SearchHit = {
                 date,
                 section: section.title,
                 title: item.title,
                 en: item.en,
-                zh: item.zh,
               };
               if (item.url !== undefined) hit.url = item.url;
               hits.push(hit);
@@ -219,13 +217,12 @@ export function createStore(options: StoreOptions): Store {
             for (const category of section.categories) {
               for (const item of category.items) {
                 if (hits.length >= limit) return hits;
-                if (!matches(needle, [category.title, category.titleZh, item.en, item.zh])) continue;
+                if (!matches(needle, [category.title, item.en])) continue;
                 const hit: SearchHit = {
                   date,
                   section: section.title,
                   title: category.title,
                   en: item.en,
-                  zh: item.zh,
                 };
                 if (item.url !== undefined) hit.url = item.url;
                 hits.push(hit);

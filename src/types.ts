@@ -11,6 +11,14 @@ export const SOURCE_TITLES: Record<SourceKey, string> = {
   hackernews: "Hacker News（過去24小時熱點）",
 };
 
+/** 来源 → 章节的短名（侧边栏用）。 */
+export const SOURCE_SHORT: Record<SourceKey, string> = {
+  twitter: "Twitter",
+  zhihu: "知乎",
+  github: "GitHub",
+  hackernews: "Hacker News",
+};
+
 /** 来源 → 抓取产物的文件名（在 runs/<date>/ 下）。 */
 export const SOURCE_FILES: Record<SourceKey, string> = {
   twitter: "twitter_raw.txt",
@@ -19,16 +27,43 @@ export const SOURCE_FILES: Record<SourceKey, string> = {
   hackernews: "hn.md",
 };
 
-/** 一条带中英对照的条目。`zh` 由机翻生成，模型不产中文。 */
+/** GitHub 条目的元信息。判断「要不要点进去」的直接依据。 */
+export interface GithubMeta {
+  /** 总 star 数，如 "41,223"。 */
+  stars?: string;
+  /** 主要语言，如 "C"。 */
+  language?: string;
+  /** 今日 star 增量，如 "287"。 */
+  todayStars?: string;
+}
+
+/** Hacker News 条目的元信息。 */
+export interface HnMeta {
+  points?: number;
+  comments?: number;
+}
+
+/** 条目的附加元信息。按来源填充不同字段。 */
+export type ItemMeta =
+  | { source: "github"; github: GithubMeta }
+  | { source: "hackernews"; hn: HnMeta }
+  | { source: "zhihu" }
+  | { source: "twitter" };
+
+/** 一条条目。 */
 export interface DigestItem {
   /** 条目标题。GitHub/HN/知乎保持原标题原语言。 */
   title: string;
-  /** 可点击链接。 */
+  /** 原始链接。点「原文」去这里。 */
   url?: string;
   /** 英文摘要，一行，15~30 词。 */
   en: string;
-  /** 繁體中文摘要，机翻生成。翻译失败时为空串。 */
+  /** 繁體中文摘要，由机翻生成。与 en 内容一致，只用于左右对照。 */
   zh: string;
+  /** 元信息。 */
+  meta?: ItemMeta;
+  /** 附加链接（如 HN 的讨论页）。 */
+  extraLinks?: Array<{ label: string; url: string }>;
 }
 
 /**
@@ -39,9 +74,9 @@ export interface DigestItem {
 export interface CategoryItem {
   /** 英文要点，可多行段落。 */
   en: string;
-  /** 繁體中文，机翻生成。 */
+  /** 繁體中文，机翻生成。与 en 内容一致。 */
   zh: string;
-  /** 指向推文或作者主页的链接。 */
+  /** 推文直链（从原始数据还原，不是作者主页）。 */
   url?: string;
 }
 
@@ -124,7 +159,7 @@ export interface DigestIndex {
 /** 生成进度事件。推给 SSE 与页面。 */
 export interface ProgressEvent {
   /** 阶段标识。 */
-  stage: "fetch" | "generate" | "translate" | "write" | "done" | "error";
+  stage: "fetch" | "generate" | "merge" | "translate" | "write" | "done" | "error";
   /** 人类可读的一句话。 */
   message: string;
   /** 0~1；未知时为 undefined。 */
@@ -133,4 +168,11 @@ export interface ProgressEvent {
   source?: SourceKey;
   /** ISO 8601。 */
   at: string;
+  /**
+   * true = 刚刚发生的实时事件；false/undefined = 服务端重放的历史事件。
+   *
+   * 区分这个很重要：客户端靠它判断「要不要刷新页面」。历史事件里也有
+   * `done`，如果当成实时的，就会每次加载都刷新一次——形成死循环。
+   */
+  live?: boolean;
 }

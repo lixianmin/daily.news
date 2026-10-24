@@ -77,6 +77,48 @@ export function todayInShanghai(now: Date = new Date()): string {
   return new Date(now.getTime() + TZ_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+/**
+ * 把 ISO 时间转成东八区的 `YYYY-MM-DD HH:mm`。
+ *
+ * 存储一律用 UTC ISO（排序、比较都安全），但**显示**必须转东八区——
+ * 直接截 ISO 字符串会看到 UTC 时间，跟用户认知里的日期差 8 小时。
+ * 比如 `2026-10-23T23:59:49Z` 实际是东八区的 `2026-10-24 07:59:49`。
+ */
+export function formatShanghai(iso: string, withMinutes = true): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const shifted = new Date(parsed.getTime() + TZ_OFFSET_MS).toISOString();
+  return withMinutes ? shifted.slice(0, 16).replace("T", " ") : shifted.slice(0, 10);
+}
+
+/** 东八区当前是几点（0~23）。 */
+export function hourInShanghai(now: Date = new Date()): number {
+  return new Date(now.getTime() + TZ_OFFSET_MS).getUTCHours();
+}
+
+/**
+ * 距下一个东八区 `hour:00` 还有多少毫秒。
+ *
+ * 用于每日定时：把「东八区 7:00」换算成本地定时器能用的延迟。
+ */
+export function msUntilNextShanghaiHour(hour: number, now: Date = new Date()): number {
+  // 东八区的「墙上时间」当作 UTC 来算，方便复用 Date.UTC
+  const shifted = new Date(now.getTime() + TZ_OFFSET_MS);
+  const target = Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate(),
+    hour,
+    0,
+    0,
+    0,
+  );
+  let delta = target - shifted.getTime();
+  // 已过今天的点，就等明天
+  if (delta <= 0) delta += 24 * 60 * 60 * 1000;
+  return delta;
+}
+
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;
 
 /** 把 `YYYY-MM-DD` 换成 "星期五"。解析失败返回空串。 */

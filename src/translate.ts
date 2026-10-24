@@ -1,9 +1,4 @@
-import type {
-  CategoryItem,
-  DigestCategory,
-  DigestSection,
-  DigestItem,
-} from "./types.ts";
+import type { CategoryItem, DigestCategory, DigestItem, DigestSection } from "./types.ts";
 
 /** 把英文翻成繁中。失败时抛错，由调用方决定是否降级。 */
 export type Translator = (text: string) => Promise<string>;
@@ -32,12 +27,16 @@ export function needsTranslation(text: string): boolean {
   return !CJK.test(trimmed);
 }
 
-/** 收集一个章节里所有需要翻译的文本，保持出现顺序。 */
+/**
+ * 收集一个章节里所有需要翻译的文本，保持出现顺序。
+ *
+ * 判据是「`zh` 为空 且 `en` 是纯英文」——只看 `en` 是否含中文是不够的，
+ * 已有译文的条目会被重复送去翻译，白烧额度。
+ */
 function collectTexts(section: DigestSection): string[] {
   const texts: string[] = [];
   if (section.kind === "items") {
     for (const item of section.items) {
-      // 已有译文的条目直接跳过：重复调用白烧额度
       if (item.zh === "" && needsTranslation(item.en)) texts.push(item.en);
     }
     return texts;
@@ -101,7 +100,7 @@ export async function translateSection(
       const trimmed = translated.trim();
       if (trimmed !== "") translations.set(text, trimmed);
     } catch {
-      // 失败就留空，translated 里没有这条
+      // 失败就留空，translations 里没有这条
     }
     done += 1;
     options.onProgress?.(done, texts.length);
@@ -116,6 +115,8 @@ export async function translateSection(
       const zh = item.zh === "" && needsTranslation(item.en) ? translateZh(item.en) : item.zh;
       const next: DigestItem = { title: item.title, en: item.en, zh };
       if (item.url !== undefined) next.url = item.url;
+      if (item.meta !== undefined) next.meta = item.meta;
+      if (item.extraLinks !== undefined) next.extraLinks = item.extraLinks;
       return next;
     });
     return { key: section.key, title: section.title, kind: "items", items };
@@ -123,7 +124,9 @@ export async function translateSection(
 
   const categories: DigestCategory[] = section.categories.map((category) => {
     const titleZh =
-      category.titleZh === "" && needsTranslation(category.title) ? translateZh(category.title) : category.titleZh;
+      category.titleZh === "" && needsTranslation(category.title)
+        ? translateZh(category.title)
+        : category.titleZh;
 
     const items: CategoryItem[] = category.items.map((item) => {
       const zh = item.zh === "" && needsTranslation(item.en) ? translateZh(item.en) : item.zh;

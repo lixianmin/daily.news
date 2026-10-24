@@ -28,6 +28,11 @@ RUN_DIR="$DATA_DIR/runs/$DATE"
 mkdir -p "$RUN_DIR" "$DATA_DIR/logs"
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG"; }
 
+# 每个来源取前几条。10 条刚好够看完热点，又不至于把摘要稀释成流水账。
+ITEM_LIMIT="${DAILY_NEWS_ITEM_LIMIT:-10}"
+# 导出给 Python 子进程：heredoc 用的是 'PYEOF'（带引号），shell 变量不会展开
+export ITEM_LIMIT
+
 ok()   { printf 'OK   %s\n' "$1" | tee -a "$LOG"; }
 fail() { printf 'FAIL %s  %s\n' "$1" "$2" | tee -a "$LOG"; }
 
@@ -39,11 +44,11 @@ fetch_gh() {
     fail gh "curl 抓取失败"; return 1
   fi
   python3 - "$tmp" > "$RUN_DIR/gh.md" <<'PYEOF'
-import sys, re, html
+import sys, re, html, os
 s = open(sys.argv[1], encoding='utf-8').read()
 rows = re.findall(r'<article[^>]*class="Box-row"[^>]*>(.*?)</article>', s, re.S)
 out = []
-for r in rows[:20]:
+for r in rows[:int(os.environ.get("ITEM_LIMIT", "10"))]:
     # 仓库名：h2.lh-condensed 里的链接才是真正的 repo 路径
     m = re.search(r'<h2 class="h3 lh-condensed">.*?href="/([^"]+)"', r, re.S)
     if not m: continue
@@ -85,7 +90,7 @@ fetch_hn() {
      (.points // 0),
      (.num_comments // 0),
      .objectID,
-     .author] | @tsv' | head -20 > "$RUN_DIR/.hn.tsv"
+     .author] | @tsv' | head -"$ITEM_LIMIT" > "$RUN_DIR/.hn.tsv"
   python3 - "$RUN_DIR/.hn.tsv" > "$RUN_DIR/hn.md" <<'PYEOF'
 import sys
 lines = [l.rstrip("\n") for l in open(sys.argv[1], encoding='utf-8') if l.strip()]
@@ -117,7 +122,7 @@ fetch_zhihu() {
   fi
   printf '%s' "$json" > "$RUN_DIR/.zhihu.raw"
   python3 - "$RUN_DIR/.zhihu.raw" > "$RUN_DIR/zhihu.md" <<'PYEOF'
-import sys, json, re
+import sys, json, re, os
 raw = open(sys.argv[1], encoding='utf-8').read()
 d = json.loads(raw)
 groups = d if isinstance(d, list) else d.get('data', [])
@@ -126,7 +131,7 @@ for g in groups:
     if g.get('id') == 'zhihu':
         items = g.get('items', []); break
 out = []
-for it in items[:20]:
+for it in items[:int(os.environ.get("ITEM_LIMIT", "10"))]:
     t = (it.get('title') or '').strip()
     if not t: continue
     qid = it.get('id')

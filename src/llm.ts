@@ -75,6 +75,19 @@ function tryParse(text: string): unknown {
   }
 }
 
+/**
+ * 响应是不是「模型想调工具」而不是直接给答案。
+ *
+ * 观察到模型有时会输出 DSML 工具调用（`invoke name="read"` 之类），
+ * 而不是 JSON。分块内容太长时最容易这样——模型被文本里的指令带跑，
+ * 想去调工具而不是总结。
+ *
+ * 这种响应没法当 JSON 用，要明确报出来，否则只报「解析失败」看不出原因。
+ */
+function looksLikeToolCall(text: string): boolean {
+  return /<\uFF5C\uFF5CDSML|invoke\s+name=|<\|\|\w+\|\|>/.test(text);
+}
+
 /** 只接受 http(s)。模型偶尔会写相对路径或 javascript: 之类的脏值。 */
 function normalizeUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -177,6 +190,13 @@ function asCategories(value: unknown): DigestCategory[] {
 export function parseSection(raw: string, key: SourceKey): ParseOutcome {
   const text = raw.trim();
   if (text === "") return { ok: false, error: "空响应" };
+
+  if (looksLikeToolCall(text)) {
+    return {
+      ok: false,
+      error: "模型输出的是工具调用而不是 JSON（分块内容可能过长，模型被带跑）",
+    };
+  }
 
   const balanced = extractBalanced(stripFence(text));
   if (balanced === null) return { ok: false, error: "响应里找不到 JSON 对象或数组" };

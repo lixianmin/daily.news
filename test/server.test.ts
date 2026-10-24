@@ -31,7 +31,7 @@ function day(date: string): DigestDay {
         key: "github",
         title: "GitHub Trending（今日趨勢）",
         kind: "items",
-        items: [{ title: "owner/repo", url: "https://github.com/owner/repo", en: "A fast CLI for X.", zh: "一個快速的 CLI。" }],
+        items: [{ title: "owner/repo", url: "https://github.com/owner/repo", en: "A fast CLI for X.", zh: "" }],
       },
     ],
   };
@@ -74,7 +74,6 @@ describe("页面路由", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("A fast CLI for X.");
-    expect(html).toContain("一個快速的 CLI。");
   });
 
   it("不存在的日期 404", async () => {

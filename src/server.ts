@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Hono } from "hono";
+import { getConnInfo } from "@hono/bun";
 import { createConsole } from "@needle/logo/console";
 import {
   CONSOLE_PASSWORD,
@@ -9,9 +10,11 @@ import {
   PORT,
   HOSTNAME,
   todayInShanghai,
+  formatShanghai,
 } from "./config.ts";
 import { generateDay, type GenerateDayResult } from "./generator.ts";
 import { log, logFiles } from "./log.ts";
+import { requestLogger } from "./middleware.ts";
 import { renderDayPage, renderIndexPage, renderSearchHits } from "./render.ts";
 import { createScheduler, type Scheduler } from "./scheduler.ts";
 import { createStore, type Store } from "./store.ts";
@@ -41,11 +44,6 @@ export interface ServerOptions {
   generate?: (date: string, onProgress: (event: ProgressEvent) => void) => Promise<boolean>;
 }
 
-/** 控制台前缀判定。`/console` 与 `/console/...` 都算，`/consolefoo` 不算。 */
-function isConsolePath(pathname: string): boolean {
-  return pathname === "/console" || pathname.startsWith("/console/");
-}
-
 /** 回环地址判定。写操作只放行本机。 */
 function isLoopback(address: string): boolean {
   return (
@@ -56,11 +54,31 @@ function isLoopback(address: string): boolean {
   );
 }
 
+/**
+ * 判断请求是否来自本机。
+ *
+ * 用 `getConnInfo` 拿真实 socket 地址——不能靠 Host / Origin 头，那些可伪造。
+ */
+function isLocalRequest(c: { req: { raw: Request } }): boolean {
+  try {
+    const address = getConnInfo(c as never).remote.address ?? "";
+    return isLoopback(address);
+  } catch {
+    // 拿不到连接信息时按不安全处理
+    return false;
+  }
+}
+
 function jsonError(message: string, status: 400 | 403 | 404 | 500): Response {
   return Response.json({ error: message }, { status });
 }
 
-export async function createServer(options: ServerOptions = {}): Promise<ServerHandle> {
+/**
+ * 构造 Hono 应用：路由、中间件、调度器、调试控制台。
+ *
+ * 与监听分离——测试要能在随机端口上起一份，生产走 Hono 的默认导出形式。
+ */
+export async function buildApp(options: ServerOptions = {}) {
   const store = options.store ?? createStore({ dataDir: (await import("./config.ts")).DATA_DIR });
   const translator = createTranslator();
   const logger = log();
@@ -71,18 +89,29 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerH
     today: () => todayInShanghai(),
     generate:
       options.generate ??
-      (async (date, onProgress) => {
-        const result: GenerateDayResult = await generateDay({ date, store, translator, onProgress });
-        return result.ok;
+      (async (date, onProgress, retryFailedSources) => {
+        const result: GenerateDayResult = await generateDay({
+          date,
+          store,
+          translator,
+          onProgress,
+          // 重试时只补失败的来源，已成功的章节原样保留
+          ...(retryFailedSources === undefined ? {} : { retryFailedSources }),
+        });
+        return { ok: result.ok, failedSources: result.failedSources };
       }),
   });
 
   const app = new Hono();
 
+  // 每个请求都留一条日志（needle）：method / path / status / 耗时 / 客户端地址
+  app.use("*", requestLogger(logger));
+
+
   // --- 页面 ---
   app.get("/", async (c) => {
     const index = await store.readIndex();
-    return c.html(renderIndexPage(index));
+    return c.html(renderIndexPage(index, todayInShanghai()));
   });
 
   app.get("/d/:date", async (c) => {
@@ -90,13 +119,14 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerH
     const day = await store.readDay(date);
     if (day === null) return c.html(renderNotFound(date), 404);
 
-    // 前后日导航
-    const dates = await store.listDates();
+    // 前后日导航 + 侧边栏的历史列表
+    const index = await store.readIndex();
+    const dates = index.days.map((entry) => entry.date);
     const at = dates.indexOf(date);
     const newer = at > 0 ? dates[at - 1] : undefined;
     const older = at >= 0 && at < dates.length - 1 ? dates[at + 1] : undefined;
 
-    return c.html(renderDayPage(day, { newer, older }));
+    return c.html(renderDayPage(day, { newer, older }, index.days, todayInShanghai()));
   });
 
   app.get("/app.js", async (c) => {
@@ -129,7 +159,11 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerH
   });
 
   app.post("/api/regenerate", async (c) => {
-    // 本机限制在 fetch 层做了（见下方 Bun.serve），这里只管参数
+    // 会烧 LLM 额度的写操作只允许本机触发（局域网手机只读）
+    if (!isLocalRequest(c)) {
+      logger.warn("regenerate rejected: not local", {});
+      return jsonError("只允许本机触发重新生成", 403);
+    }
     const body = await c.req.json().catch(() => ({}));
     const requested = typeof body?.date === "string" && body.date !== "" ? body.date : todayInShanghai();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(requested)) return jsonError("日期格式应为 YYYY-MM-DD", 400);
@@ -147,20 +181,24 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerH
         const encoder = new TextEncoder();
         let closed = false;
 
-        const push = (event: ProgressEvent): void => {
+        const push = (event: ProgressEvent, live: boolean): void => {
           if (closed) return;
           try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            // live 标记让客户端能区分「实时事件」与「历史重放」：
+            // 只有实时的 done 才触发页面刷新，否则每次加载都会刷新一次。
+            const payload = live ? { ...event, live: true } : { ...event, live: false };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
           } catch {
             closed = true;
           }
         };
 
-        // 新连接先补齐最近的事件，页面不必等下一步才知道在干什么
-        push({ stage: "fetch", message: "已连接", at: new Date().toISOString() });
-        for (const event of scheduler.recentEvents()) push(event);
+        // 新连接先补齐最近的事件，页面不必等下一步才知道在干什么。
+        // 这些是历史快照（live=false），不能触发客户端的刷新动作。
+        push({ stage: "fetch", message: "已连接", at: new Date().toISOString() }, false);
+        for (const event of scheduler.recentEvents()) push(event, false);
 
-        const unsubscribe = scheduler.subscribe(push);
+        const unsubscribe = scheduler.subscribe((event) => push(event, true));
         const heartbeat = setInterval(() => {
           if (closed) return;
           try {
@@ -248,7 +286,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerH
               day.weekday,
               String(day.total),
               `${day.sourcesOk}/${SOURCE_KEYS.length}`,
-              day.generatedAt.replace("T", " ").slice(0, 19),
+              formatShanghai(day.generatedAt, true),
             ]),
           };
         },
@@ -302,42 +340,34 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerH
 
   app.notFound((c) => jsonError(`没有这个路径：${new URL(c.req.url).pathname}`, 404));
 
-  // --- 启动 ---
-  //
-  // 用 Bun.serve 而不是 needle 的 node serve：只有它能通过 `server.requestIP()`
-  // 拿到真实连接地址。写操作限本机靠这个判断，不能靠可伪造的 Host / Origin 头。
-  const hostname = options.hostname ?? HOSTNAME;
-  const port = options.port ?? PORT;
-
-  const bunServer = Bun.serve({
-    port,
-    hostname,
-    fetch(request, srv) {
-      const { pathname } = new URL(request.url);
-
-      if (isConsolePath(pathname)) return debug.handler(request);
-
-      // 会烧 LLM 额度的写操作只允许本机触发
-      if (request.method === "POST" && pathname === "/api/regenerate") {
-        const address = srv.requestIP(request)?.address ?? "";
-        if (!isLoopback(address)) {
-          logger.warn("regenerate rejected: not local", { address });
-          return jsonError("只允许本机触发重新生成", 403);
-        }
-      }
-
-      return app.fetch(request);
-    },
-  });
-
   if (options.skipStartupCheck !== true) {
     void scheduler.checkOnStart();
     scheduler.start();
   }
 
+  return { app, scheduler, debug, logger };
+}
+
+/**
+ * 起服务。
+ *
+ * Hono 在 Bun 上的官方形式是 `export default { port, fetch }`——Bun 运行时
+ * 认这个默认导出并自己监听。这样路由、中间件、上下文、错误处理全是 Hono 的，
+ * Bun 只负责 socket 层。
+ */
+export async function createServer(options: ServerOptions = {}): Promise<ServerHandle> {
+  const built = await buildApp(options);
+  const { app, scheduler, debug, logger } = built;
+
+  const hostname = options.hostname ?? HOSTNAME;
+  const port = options.port ?? PORT;
+
+  // 测试用随机端口（port=0）；生产走 Hono 的默认导出形式
+  const bunServer = Bun.serve({ port, hostname, fetch: app.fetch });
+
   logger.info("server listening", {
-    url: `http://127.0.0.1:${bunServer.port}`,
-    console: `http://127.0.0.1:${bunServer.port}/console`,
+    url: `http://127.0.0.1:${bunServer.port ?? port}`,
+    console: `http://127.0.0.1:${bunServer.port ?? port}/console`,
     hostname,
   });
 
@@ -362,17 +392,41 @@ function renderNotFound(date: string): string {
 </body></html>`;
 }
 
-if (import.meta.main) {
-  const handle = await createServer();
-  const shutdown = async (signal: string): Promise<void> => {
-    log().info("shutting down", { signal });
+/**
+ * 生产入口：Hono 在 Bun 上的官方形式。
+ *
+ * `export default { port, hostname, fetch }` —— Bun 运行时认这个默认导出并
+ * 自己监听。路由、中间件、上下文、错误处理全是 Hono 的，Bun 只管 socket 层。
+ *
+ * 顶层声明（不能在 `if` 块里 export default）；非主模块时不启动。
+ */
+const built = import.meta.main ? await buildApp() : null;
+
+if (built !== null) {
+  const { scheduler, debug, logger } = built;
+
+  logger.info("server starting", {
+    url: `http://127.0.0.1:${PORT}`,
+    console: `http://127.0.0.1:${PORT}/console`,
+    hostname: HOSTNAME,
+  });
+
+  const shutdown = (signal: string): void => {
+    logger.info("shutting down", { signal });
+    scheduler.stop();
+    debug.dispose();
     // 先把缓冲区冲掉再退出，否则最后一批 info 日志会丢
     flushLogs();
-    await handle.close().catch(() => undefined);
     process.exit(0);
   };
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
-  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
+
+export default {
+  port: PORT,
+  hostname: HOSTNAME,
+  fetch: built?.app.fetch ?? (() => new Response("not started", { status: 503 })),
+};
 
 export type { SourceKey };

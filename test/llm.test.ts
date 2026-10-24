@@ -91,7 +91,7 @@ describe("parseSection：条目校验", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("zh 一律初始化为空串（中文由机翻填充，模型不产）", () => {
+  it("zh 初始化为空串（中文由机翻填充，模型不产）", () => {
     const result = parseSection(itemsJson([{ title: "a/b", en: "Does things." }]), "github");
     expect(result.ok).toBe(true);
     if (!result.ok || result.section.kind !== "items") return;
@@ -124,7 +124,6 @@ describe("parseSection：Twitter 分类结构", () => {
     if (!result.ok || result.section.kind !== "categories") return;
     expect(result.section.categories).toHaveLength(1);
     expect(result.section.categories[0]?.title).toBe("AI Models & Benchmarks");
-    expect(result.section.categories[0]?.titleZh).toBe("");
     expect(result.section.categories[0]?.items).toHaveLength(2);
   });
 
@@ -163,6 +162,14 @@ describe("parseSection：彻底非法", () => {
 
   it("括号不配平时判失败且不抛", () => {
     expect(parseSection('{"items":[{"title":"a"', "github").ok).toBe(false);
+  });
+
+  it("模型输出工具调用时明确报出原因", () => {
+    const dsml = '<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name="read">\n</｜｜DSML｜｜ calls>';
+    const result = parseSection(dsml, "twitter");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("工具调用");
   });
 
   it("失败时带可读的 error 字符串", () => {
