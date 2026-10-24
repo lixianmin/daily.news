@@ -228,6 +228,7 @@ fetch.sh                              → runs/<date>/*.md
 4. **launchd 环境无 shell rc**：LLM key 从 `~/.zshrc.sh` 精确抽取（已实测该抽取逻辑在 `env -i` 干净环境下有效）
 5. **局域网暴露**：`/api/regenerate` 限本机；只读接口不设防
 6. **端口**：8790
+7. **错误响应形状固定**：接口失败一律非 2xx + `{ "code": ..., "message": ... }`，由 `@needle/shell` 的 `ResponseX` 出口（具名方法锁死状态码与 `code`），不自己拼 `{error}` 那种壳。客户端只需一条规则：`if (!res.ok) { const { code, message } = await res.json(); }`。`/health` 是探活载荷，不走这个信封
 
 ## 7. 已定与待定
 

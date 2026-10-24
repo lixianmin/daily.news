@@ -104,11 +104,12 @@ describe("API 路由", () => {
     expect(payload.sections).toHaveLength(1);
   });
 
-  it("/api/day/:date 不存在时 404 + error 字段", async () => {
+  it("/api/day/:date 不存在时 404 + not_found 信封", async () => {
     const response = await fetch(`${base}/api/day/1999-01-01`);
     expect(response.status).toBe(404);
     const payload = await jsonOf(response);
-    expect(payload.error).toBeTruthy();
+    expect(payload.code).toBe("not_found");
+    expect(payload.message).toBeTruthy();
   });
 
   it("/api/search 能搜到", async () => {
@@ -137,7 +138,8 @@ describe("API 路由", () => {
     const response = await fetch(`${base}/nope`);
     expect(response.status).toBe(404);
     const payload = await jsonOf(response);
-    expect(payload.error).toContain("/nope");
+    expect(payload.code).toBe("not_found");
+    expect(payload.message).toContain("/nope");
   });
 });
 
@@ -161,6 +163,9 @@ describe("POST /api/regenerate", () => {
       body: JSON.stringify({ date: "2026/10/23" }),
     });
     expect(response.status).toBe(400);
+    const payload = await jsonOf(response);
+    expect(payload.code).toBe("bad_request");
+    expect(payload.message).toContain("YYYY-MM-DD");
   });
 
   it("省略日期时默认今天", async () => {

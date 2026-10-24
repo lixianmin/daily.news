@@ -458,7 +458,7 @@
       if ($progress !== null) {
         $progress.textContent = response.ok
           ? "已开始生成，进度见上"
-          : `未启动：${payload.reason ?? payload.error ?? response.status}`;
+          : `未启动：${payload.reason ?? payload.message ?? response.status}`;
       }
     } catch (error) {
       state = "idle";

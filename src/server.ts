@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { getConnInfo } from "@hono/bun";
-import { createServerShell } from "@needle/shell";
+import { createServerShell, ResponseX } from "@needle/shell";
 import {
   CONSOLE_PASSWORD,
   CONSOLE_SECRET,
@@ -67,10 +67,6 @@ function isLocalRequest(c: { req: { raw: Request } }): boolean {
     // 拿不到连接信息时按不安全处理
     return false;
   }
-}
-
-function jsonError(message: string, status: 400 | 403 | 404 | 500): Response {
-  return Response.json({ error: message }, { status });
 }
 
 /**
@@ -149,7 +145,7 @@ export async function buildApp(options: ServerOptions = {}) {
   app.get("/api/day/:date", async (c) => {
     const day = await store.readDay(c.req.param("date"));
     if (day === null) {
-      return jsonError("没有这一天的数据", 404);
+      return ResponseX.notFound("没有这一天的数据");
     }
     return c.json(day);
   });
@@ -166,12 +162,12 @@ export async function buildApp(options: ServerOptions = {}) {
     // 会烧 LLM 额度的写操作只允许本机触发（局域网手机只读）
     if (!isLocalRequest(c)) {
       logger.warn("regenerate rejected: not local", {});
-      return jsonError("只允许本机触发重新生成", 403);
+      return ResponseX.fail(403, "forbidden", "只允许本机触发重新生成");
     }
     const body = await c.req.json().catch(() => ({}));
     const requested = typeof body?.date === "string" && body.date !== "" ? body.date : todayInShanghai();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(requested)) {
-      return jsonError("日期格式应为 YYYY-MM-DD", 400);
+      return ResponseX.badRequest("日期格式应为 YYYY-MM-DD");
     }
 
     const result = await scheduler.regenerate(requested);
@@ -354,7 +350,7 @@ export async function buildApp(options: ServerOptions = {}) {
   app.all("/console", (c) => debug.handler(c.req.raw));
   app.all("/console/*", (c) => debug.handler(c.req.raw));
 
-  app.notFound((c) => jsonError(`没有这个路径：${new URL(c.req.url).pathname}`, 404));
+  app.notFound((c) => ResponseX.notFound(`没有这个路径：${new URL(c.req.url).pathname}`));
 
   if (options.skipStartupCheck !== true) {
     void scheduler.checkOnStart();
