@@ -11,6 +11,7 @@ import {
   HOSTNAME,
   todayInShanghai,
   formatShanghai,
+  queueDbPath,
 } from "./config.ts";
 import { createHono } from "./core/index.ts";
 import { generateDay, type GenerateDayResult } from "./generator.ts";
@@ -40,6 +41,8 @@ export interface ServerOptions {
   hostname?: string;
   /** 跳过启动自检（测试用）。 */
   skipStartupCheck?: boolean;
+  /** 队列文件路径。测试用。 */
+  queuePath?: string;
   /** 替换真实生成函数（测试用）。不传则跑真实抓取 + 模型调用。 */
   generate?: (date: string, onProgress: (event: ProgressEvent) => void) => Promise<boolean>;
 }
@@ -81,8 +84,10 @@ export async function buildApp(options: ServerOptions = {}) {
 
   // --- 调度器 ---
   const scheduler = createScheduler({
-    hasDay: async (date) => (await store.readDay(date)) !== null,
+    readDay: async (date) => store.readDay(date),
     today: () => todayInShanghai(),
+    // 队列跟数据放一起：延时任务与成品同生共死
+    dataPath: options.queuePath ?? queueDbPath(store.dataDir),
     generate:
       options.generate ??
       (async (date, onProgress, retryFailedSources) => {
@@ -350,9 +355,11 @@ export async function buildApp(options: ServerOptions = {}) {
 
   app.notFound((c) => ResponseX.notFound(`没有这个路径：${new URL(c.req.url).pathname}`));
 
+  // 队列与 worker 总是要起来的——它才是定时生成的主体
+  await scheduler.start();
   if (options.skipStartupCheck !== true) {
-    void scheduler.checkOnStart();
-    scheduler.start();
+    // 补跑是往队列里塞任务，所以必须排在 start 之后
+    await scheduler.checkOnStart();
   }
 
   return { app, scheduler, debug, logger };
@@ -385,7 +392,7 @@ export async function createServer(options: ServerOptions = {}): Promise<ServerH
     port: bunServer.port ?? port,
     scheduler,
     close: async () => {
-      scheduler.stop();
+      await scheduler.stop();
       debug.dispose();
       await bunServer.stop();
     },
@@ -421,16 +428,20 @@ if (built !== null) {
     hostname: HOSTNAME,
   });
 
-  const shutdown = (signal: string): void => {
+  const shutdown = async (signal: string): Promise<void> => {
     logger.info("shutting down", { signal });
-    scheduler.stop();
+    await scheduler.stop();
     debug.dispose();
     // 先把缓冲区冲掉再退出，否则最后一批 info 日志会丢
     flushLogs();
     process.exit(0);
   };
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
 }
 
 export default {

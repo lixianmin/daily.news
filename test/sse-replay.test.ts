@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { Hono } from "hono";
 import { createScheduler } from "../src/scheduler.ts";
 import type { ProgressEvent } from "../src/types.ts";
+import { TEST_QUEUE_PATH, waitFor } from "./helpers/queue.ts";
 
 /**
  * SSE 的历史重放。
@@ -102,18 +103,21 @@ async function readEvents(url: string, n: number, timeoutMs = 1200): Promise<Pro
 describe("SSE 历史重放不会触发页面刷新", () => {
   it("新连接重放的 done 事件带 live: false（客户端不会因此刷新）", async () => {
     const scheduler = createScheduler({
-      hasDay: async () => true,
+      readDay: async () => null,
       today: () => "2026-10-24",
       generate: async () => true,
+      dataPath: TEST_QUEUE_PATH,
     });
+    await scheduler.start();
 
     // 先跑一次完成，产出 done 事件进历史
     await scheduler.regenerate("2026-10-24");
+    await waitFor(() => scheduler.recentEvents().some((e) => e.stage === "done"));
     expect(scheduler.recentEvents().some((e) => e.stage === "done")).toBe(true);
 
     const { url, stop } = await startSseServer(scheduler);
     try {
-      const events = await readEvents(url, 6);
+      const events = await readEvents(url, 2);
       const done = events.find((event) => event.stage === "done");
 
       expect(done).toBeDefined();
@@ -121,22 +125,25 @@ describe("SSE 历史重放不会触发页面刷新", () => {
       expect(done?.live).toBe(false);
     } finally {
       stop();
+      await scheduler.stop();
     }
   });
 
   it("订阅期间产生的 done 是 live: true", async () => {
     const scheduler = createScheduler({
-      hasDay: async () => true,
-      today: () => "2026-10-24",
+      readDay: async () => null,
+      today: () => "2026-10-25",
       generate: async () => true,
+      dataPath: TEST_QUEUE_PATH,
     });
+    await scheduler.start();
 
     const { url, stop } = await startSseServer(scheduler);
     try {
-      const pending = readEvents(url, 3);
+      const pending = readEvents(url, 2);
       // 稍等，确保连接已建立
       await new Promise((resolve) => setTimeout(resolve, 50));
-      await scheduler.regenerate("2026-10-24");
+      await scheduler.regenerate("2026-10-25");
 
       const events = await pending;
       const done = events.find((event) => event.stage === "done");
@@ -144,6 +151,7 @@ describe("SSE 历史重放不会触发页面刷新", () => {
       expect(done?.live).toBe(true);
     } finally {
       stop();
+      await scheduler.stop();
     }
   });
 

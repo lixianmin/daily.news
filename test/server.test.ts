@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createServer, type ServerHandle } from "../src/server.ts";
 import { createStore, type Store } from "../src/store.ts";
 import type { DigestDay } from "../src/types.ts";
+import { TEST_QUEUE_PATH } from "./helpers/queue.ts";
 
 /** 测试里读 JSON 的出口。Response.json() 返回 unknown，这里统一收窄。 */
 function jsonOf(response: Response): Promise<any> {
@@ -48,6 +49,8 @@ beforeEach(async () => {
     port: 0,
     hostname: "127.0.0.1",
     skipStartupCheck: true,
+    // bunqueue 内嵌模式是每进程一个 manager，路径必须全局一致
+    queuePath: TEST_QUEUE_PATH,
     // 测试里绝不跑真实抓取与模型调用
     generate: async () => true,
   });

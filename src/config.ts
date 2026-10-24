@@ -26,6 +26,16 @@ export const RUNS_RETENTION_DAYS = 7;
 /** 日志保留天数。 */
 export const LOGS_RETENTION_DAYS = 30;
 
+/**
+ * 队列持久化文件。
+ *
+ * bunqueue 内嵌模式的一个 SQLite 文件：延时任务、cron 时段都在里面，
+ * 进程重启后接着跑。默认跟数据放一起。
+ */
+export function queueDbPath(dataDir: string = DATA_DIR): string {
+  return join(dataDir, "jobs.db");
+}
+
 /** 主通道：deepseek，key 从 ~/.zshrc.sh 抽取（launchd 不读 shell rc）。 */
 export const PRIMARY_PROVIDER = process.env["PRIMARY_PROVIDER"] ?? "deepseek";
 export const PRIMARY_MODEL = process.env["PRIMARY_MODEL"] ?? "deepseek-flash";
@@ -106,31 +116,6 @@ export function formatShanghai(iso: string, withMinutes = true): string {
 /** 东八区当前是几点（0~23）。 */
 export function hourInShanghai(now: Date = new Date()): number {
   return new Date(now.getTime() + TZ_OFFSET_MS).getUTCHours();
-}
-
-/**
- * 距下一个东八区 `hour:00` 还有多少毫秒。
- *
- * 用于每日定时：把「东八区 7:00」换算成本地定时器能用的延迟。
- */
-export function msUntilNextShanghaiHour(hour: number, now: Date = new Date()): number {
-  // 东八区的「墙上时间」当作 UTC 来算，方便复用 Date.UTC
-  const shifted = new Date(now.getTime() + TZ_OFFSET_MS);
-  const target = Date.UTC(
-    shifted.getUTCFullYear(),
-    shifted.getUTCMonth(),
-    shifted.getUTCDate(),
-    hour,
-    0,
-    0,
-    0,
-  );
-  let delta = target - shifted.getTime();
-  // 已过今天的点，就等明天
-  if (delta <= 0) {
-    delta += 24 * 60 * 60 * 1000;
-  }
-  return delta;
 }
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;

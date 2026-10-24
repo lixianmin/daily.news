@@ -1,10 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  formatShanghai,
-  hourInShanghai,
-  msUntilNextShanghaiHour,
-  todayInShanghai,
-} from "../src/config.ts";
+import { formatShanghai, hourInShanghai, todayInShanghai } from "../src/config.ts";
 
 /**
  * 时区。
@@ -51,30 +46,10 @@ describe("时区转换", () => {
 });
 
 describe("每日 7:00 定时", () => {
-  it("距下一个 7:00 的毫秒数（当天还没到）", () => {
-    // 东八区 03:00 → 还有 4 小时
-    const now = new Date("2026-10-23T19:00:00Z"); // = 东八区 10-24 03:00
-    expect(msUntilNextShanghaiHour(7, now)).toBe(4 * 60 * 60 * 1000);
-  });
-
-  it("距下一个 7:00 的毫秒数（今天已过，明早）", () => {
-    // 东八区 10:00 → 还有 21 小时
-    const now = new Date("2026-10-24T02:00:00Z"); // = 东八区 10-00
-    expect(msUntilNextShanghaiHour(7, now)).toBe(21 * 60 * 60 * 1000);
-  });
-
-  it("刚好到点时返回满 24 小时", () => {
-    // 东八区 07:00:00.000 整
-    const now = new Date("2026-10-23T23:00:00.000Z");
-    expect(msUntilNextShanghaiHour(7, now)).toBe(24 * 60 * 60 * 1000);
-  });
-
-  it("延迟总是落在 0~24 小时之间", () => {
-    for (let h = 0; h < 24; h++) {
-      const now = new Date(Date.UTC(2026, 9, 24, h, 30));
-      const delta = msUntilNextShanghaiHour(7, now);
-      expect(delta).toBeGreaterThan(0);
-      expect(delta).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
-    }
+  it("每日定时由 bunqueue cron 负责时区换算，这里只保留小时判定", () => {
+    // 东八区 07:00 对应 UTC 23:00
+    expect(hourInShanghai(new Date("2026-10-23T23:00:00Z"))).toBe(7);
+    // 东八区 06:59 还没到点
+    expect(hourInShanghai(new Date("2026-10-23T22:59:00Z"))).toBe(6);
   });
 });
