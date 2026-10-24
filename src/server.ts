@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { getConnInfo } from "@hono/bun";
-import { createConsole } from "@needle/logo/console";
+import { createServerShell } from "@needle/shell";
 import {
   CONSOLE_PASSWORD,
   CONSOLE_SECRET,
@@ -262,7 +262,7 @@ export async function buildApp(options: ServerOptions = {}) {
     });
   }
 
-  const debug = createConsole({
+  const debug = createServerShell({
     logger,
     title: "daily.news",
     version: SERVER_VERSION,

@@ -5,7 +5,9 @@
     "": {
       "name": "daily.news",
       "dependencies": {
-        "@needle/logo": "github:lixianmin/needle#main",
+        "@hono/bun": "^1.0.1",
+        "@needle/logo": "link:@needle/logo",
+        "@needle/shell": "link:@needle/shell",
         "hono": "^4.13.13",
       },
       "devDependencies": {
@@ -15,7 +17,11 @@
     },
   },
   "packages": {
-    "@needle/logo": ["@needle/logo@github:lixianmin/needle#8d42fc0", {}, "lixianmin-needle-8d42fc0", "sha512-KlhCoNPJwnTkFei48oXrgukDCrTGr5XlPv/sHOut+uDw1Hb4IL2O9emahOj5y/hcAj2m9+Wg43N4BDP35eMbeA=="],
+    "@hono/bun": ["@hono/bun@1.0.1", "", { "peerDependencies": { "hono": ">=4.13.9 || ^5.0.0-0" } }, "sha512-74m9j/JY6sPhjOnZZSSPFDRWWRVqO8jI7cDTrcjXP+qnlCMOu0BCLnjq31LrKsWGWW7SsRWDzqrf9vDfnwtStA=="],
+
+    "@needle/logo": ["@needle/logo@link:@needle/logo", {}],
+
+    "@needle/shell": ["@needle/shell@link:@needle/shell", {}],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

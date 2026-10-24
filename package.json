@@ -7,10 +7,13 @@
   "scripts": {
     "start": "bun run src/server.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "link:needle": "bun link @needle/logo @needle/shell"
   },
   "dependencies": {
-    "@needle/logo": "github:lixianmin/needle#main",
+    "@hono/bun": "^1.0.1",
+    "@needle/logo": "link:@needle/logo",
+    "@needle/shell": "link:@needle/shell",
     "hono": "^4.13.13"
   },
   "devDependencies": {
