@@ -69,7 +69,9 @@ export interface SectionOutcome {
  */
 export async function readShellVar(name: string): Promise<string | null> {
   const already = process.env[name];
-  if (already !== undefined && already !== "") return already;
+  if (already !== undefined && already !== "") {
+    return already;
+  }
 
   const rc = join(homedir(), ".zshrc.sh");
   let content: string;
@@ -81,7 +83,9 @@ export async function readShellVar(name: string): Promise<string | null> {
 
   const pattern = new RegExp(`^\\s*export\\s+${name}=(.*)$`, "m");
   const match = pattern.exec(content);
-  if (match === null) return null;
+  if (match === null) {
+    return null;
+  }
 
   const raw = (match[1] ?? "").trim();
   const value = raw.replace(/^["']/, "").replace(/["']$/, "");
@@ -227,7 +231,9 @@ export async function generateSection(options: GenerateOptions): Promise<Section
         });
       }
 
-      if (i < PRIMARY_ATTEMPTS) await sleep(i * RETRY_BACKOFF_MS);
+      if (i < PRIMARY_ATTEMPTS) {
+        await sleep(i * RETRY_BACKOFF_MS);
+      }
     }
   }
 
@@ -279,7 +285,9 @@ export async function generateSection(options: GenerateOptions): Promise<Section
       logger.warn("fallback call failed", { source: options.key, attempt: j, elapsedMs, error: lastError });
     }
 
-    if (j < FALLBACK_ATTEMPTS) await sleep(j * RETRY_BACKOFF_MS);
+    if (j < FALLBACK_ATTEMPTS) {
+      await sleep(j * RETRY_BACKOFF_MS);
+    }
   }
 
   logger.error("section generation failed", { source: options.key, attempts, error: lastError });

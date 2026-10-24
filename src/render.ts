@@ -32,7 +32,9 @@ export function escapeHtml(text: string): string {
 
 /** 只放行 http(s)，挡住 javascript: 之类的脏链接。 */
 function safeUrl(url: string | undefined): string | undefined {
-  if (url === undefined) return undefined;
+  if (url === undefined) {
+    return undefined;
+  }
   return /^https?:\/\//i.test(url) ? escapeHtml(url) : undefined;
 }
 
@@ -209,19 +211,31 @@ function renderSourceTag(key: SourceKey): string {
 /** 元信息 chip。 */
 function renderChips(item: DigestItem): string {
   const meta = item.meta;
-  if (meta === undefined) return "";
+  if (meta === undefined) {
+    return "";
+  }
   const chips: string[] = [];
 
   if (meta.source === "github") {
     const { stars, language, todayStars } = meta.github;
-    if (stars !== undefined) chips.push(`<span class="chip star">★ ${escapeHtml(stars)}</span>`);
-    if (todayStars !== undefined) chips.push(`<span class="chip up">+${escapeHtml(todayStars)} today</span>`);
-    if (language !== undefined) chips.push(`<span class="chip lang">${escapeHtml(language)}</span>`);
+    if (stars !== undefined) {
+      chips.push(`<span class="chip star">★ ${escapeHtml(stars)}</span>`);
+    }
+    if (todayStars !== undefined) {
+      chips.push(`<span class="chip up">+${escapeHtml(todayStars)} today</span>`);
+    }
+    if (language !== undefined) {
+      chips.push(`<span class="chip lang">${escapeHtml(language)}</span>`);
+    }
   }
   if (meta.source === "hackernews") {
     const { points, comments } = meta.hn;
-    if (points !== undefined) chips.push(`<span class="chip up">${points} points</span>`);
-    if (comments !== undefined) chips.push(`<span class="chip">${comments} comments</span>`);
+    if (points !== undefined) {
+      chips.push(`<span class="chip up">${points} points</span>`);
+    }
+    if (comments !== undefined) {
+      chips.push(`<span class="chip">${comments} comments</span>`);
+    }
   }
 
   return chips.length === 0 ? "" : `<div class="chips">${chips.join("")}</div>`;
@@ -230,7 +244,9 @@ function renderChips(item: DigestItem): string {
 /** 「原文 ↗」按钮。 */
 function renderOriginalLink(url: string | undefined, label = "原文"): string {
   const safe = safeUrl(url);
-  if (safe === undefined) return "";
+  if (safe === undefined) {
+    return "";
+  }
   return `<a class="link-btn" href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)} <span class="ext">↗</span></a>`;
 }
 
@@ -261,7 +277,9 @@ function renderItemCard(item: DigestItem, source: SourceKey): string {
   const extra = (item.extraLinks ?? [])
     .map((link) => {
       const safe = safeUrl(link.url);
-      if (safe === undefined) return "";
+      if (safe === undefined) {
+        return "";
+      }
       return `<a class="link-btn quiet" href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)} ↗</a>`;
     })
     .join("");
@@ -300,8 +318,12 @@ function renderCategory(category: {
       const text = escapeHtml(item.en)
         .split(/(@[A-Za-z0-9_]{1,15})/g)
         .map((part) => {
-          if (!part.startsWith("@")) return part;
-          if (url === undefined) return part;
+          if (!part.startsWith("@")) {
+            return part;
+          }
+          if (url === undefined) {
+            return part;
+          }
           return `<a class="cite" href="${url}" target="_blank" rel="noopener noreferrer">${part}</a>`;
         })
         .join("");
@@ -350,7 +372,9 @@ function renderSection(section: DigestSection): string {
 /** 失败来源的提示块。 */
 function renderMissing(sources: DigestDay["sources"]): string {
   const missing = SOURCE_KEYS.filter((key) => sources[key]?.ok !== true);
-  if (missing.length === 0) return "";
+  if (missing.length === 0) {
+    return "";
+  }
 
   const names = missing.map((key) => SOURCE_SHORT[key]).join("、");
   return `<div class="warn-box">⚠️ <b>${escapeHtml(names)}</b> 本次未成功——可能是抓取失败或生成失败。</div>`;
@@ -471,7 +495,9 @@ export interface SearchHitPayload {
 }
 
 export function renderSearchHits(hits: SearchHitPayload[]): string {
-  if (hits.length === 0) return `<div class="empty">没有匹配的结果。</div>`;
+  if (hits.length === 0) {
+    return `<div class="empty">没有匹配的结果。</div>`;
+  }
   return hits
     .map((hit) => {
       const url = safeUrl(hit.url);

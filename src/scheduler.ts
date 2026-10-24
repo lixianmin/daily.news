@@ -100,7 +100,9 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
 
   function record(event: ProgressEvent): void {
     events.push(event);
-    if (events.length > MAX_EVENTS) events.shift();
+    if (events.length > MAX_EVENTS) {
+      events.shift();
+    }
     for (const listener of listeneters) {
       try {
         listener(event);
@@ -188,7 +190,9 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
       } else {
         // 全都成功了，清掉重试状态
         clearRetry();
-        for (const key of failed) retryAttempts.delete(key);
+        for (const key of failed) {
+          retryAttempts.delete(key);
+        }
       }
 
       record({
@@ -236,10 +240,14 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
 
     // 合并到已有的待重试里
     const merged = new Set(pendingRetry?.date === date ? pendingRetry.sources : []);
-    for (const source of retryable) merged.add(source);
+    for (const source of retryable) {
+      merged.add(source);
+    }
 
     pendingRetry = { date, sources: [...merged] };
-    if (retryTimer !== undefined) clearTimeout(retryTimer);
+    if (retryTimer !== undefined) {
+      clearTimeout(retryTimer);
+    }
 
     const delayMs = options.retryDelayMs ?? RETRY_DELAY_MS;
     const minutes = Math.max(1, Math.round(delayMs / 60000));
@@ -255,7 +263,9 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
       retryTimer = undefined;
       const pending = pendingRetry;
       pendingRetry = undefined;
-      if (pending === undefined) return;
+      if (pending === undefined) {
+        return;
+      }
 
       // 记一次重试
       for (const source of pending.sources) {
@@ -305,16 +315,24 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
     },
 
     start() {
-      if (timer !== undefined) return;
+      if (timer !== undefined) {
+        return;
+      }
       const intervalMs = options.intervalMs ?? RECHECK_INTERVAL_MS;
       timer = setInterval(() => {
         const date = options.today();
         void (async () => {
-          if (running) return;
+          if (running) {
+            return;
+          }
           // 今天已经跑过就不重复（生成成功但还没落盘的窗口期内，
           // 每小时复查会看到 hasDay=false，重复跑就是白烧额度）
-          if (lastRunDate === date) return;
-          if (await options.hasDay(date)) return;
+          if (lastRunDate === date) {
+            return;
+          }
+          if (await options.hasDay(date)) {
+            return;
+          }
           await run(date, "interval");
         })();
       }, intervalMs);
@@ -337,7 +355,9 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
     },
 
     async regenerate(date) {
-      if (running) return { started: false, reason: "已有生成任务在跑" };
+      if (running) {
+        return { started: false, reason: "已有生成任务在跑" };
+      }
       // 同样不 await：HTTP 请求立即返回，进度走 SSE
       void run(date, "manual");
       return { started: true };

@@ -46,7 +46,9 @@ export function buildTwitterChunk(raw: string): string {
       let j = i + 1;
       while (j < lines.length) {
         const next = lines[j] ?? "";
-        if (next.trim() === "---" || (next.startsWith("**") && next.includes("@"))) break;
+        if (next.trim() === "---" || (next.startsWith("**") && next.includes("@"))) {
+          break;
+        }
         body.push(next);
         j += 1;
       }
@@ -174,7 +176,9 @@ async function prepareChunks(date: string, only?: SourceKey[]): Promise<Chunk[]>
     } catch {
       continue; // 该来源没抓到
     }
-    if (content.trim() === "") continue;
+    if (content.trim() === "") {
+      continue;
+    }
 
     if (key === "twitter") {
       // 只取推文首行与互动数——全文太长且杂，模型容易被带跑去调工具
@@ -204,11 +208,17 @@ async function prepareChunks(date: string, only?: SourceKey[]): Promise<Chunk[]>
 
 /** 把同一个 key 的多块结果拼成一个章节。 */
 function mergeSections(key: SourceKey, sections: DigestSection[]): DigestSection | null {
-  if (sections.length === 0) return null;
-  if (sections.length === 1) return sections[0]!;
+  if (sections.length === 0) {
+    return null;
+  }
+  if (sections.length === 1) {
+    return sections[0]!;
+  }
 
   const allItems = sections.flatMap((section) => (section.kind === "items" ? section.items : []));
-  if (allItems.length === 0) return sections[0]!;
+  if (allItems.length === 0) {
+    return sections[0]!;
+  }
   return { key, title: SOURCE_TITLES[key], kind: "items", items: allItems };
 }
 
@@ -332,12 +342,16 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
 
   for (const key of SOURCE_KEYS) {
     const parts = produced.get(key);
-    if (parts === undefined || parts.length === 0) continue;
+    if (parts === undefined || parts.length === 0) {
+      continue;
+    }
 
     // 先截断再回填元信息（去重 HN 摘要里的重复数字），再翻译——
     // 顺序反了的话，译出来的是带重复数字的旧文本
     const merged = mergeSections(key, parts);
-    if (merged === null) continue;
+    if (merged === null) {
+      continue;
+    }
     const limited = limitSectionItems(merged);
     const enriched = await enrichSection(limited, { runsDir: runsDir(date), date }, metaIndexes);
 
@@ -378,7 +392,9 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
     const existing = await store.readDay(date);
     if (existing !== null) {
       const merged = new Map(existing.sections.map((sec) => [sec.key, sec]));
-      for (const sec of sections) merged.set(sec.key, sec);
+      for (const sec of sections) {
+        merged.set(sec.key, sec);
+      }
       // 按 SOURCE_KEYS 的固定顺序排，页面显示才稳定
       finalSections = SOURCE_KEYS.filter((key) => merged.has(key)).map((key) => merged.get(key)!);
       finalSources = { ...existing.sources, ...statuses };

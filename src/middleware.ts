@@ -51,8 +51,12 @@ export function requestLogger(logger: Logger): MiddlewareHandler {
     };
 
     // 状态码分级：5xx 记 error，4xx 记 warn，其余 info
-    if (status >= 500) logger.error("request", fields);
-    else if (status >= 400) logger.warn("request", fields);
-    else logger.info("request", fields);
+    if (status >= 500) {
+      logger.error("request", fields);
+    } else if (status >= 400) {
+      logger.warn("request", fields);
+    } else {
+      logger.info("request", fields);
+    }
   };
 }

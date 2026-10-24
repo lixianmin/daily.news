@@ -39,7 +39,9 @@ describe("enrichSection：GitHub 元信息", () => {
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
     expect(result.kind).toBe("items");
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
 
     const first = result.items[0]!;
     expect(first.meta).toEqual({
@@ -66,7 +68,9 @@ describe("enrichSection：Hacker News 元信息与去重", () => {
     };
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
 
     expect(result.items[0]?.meta).toEqual({
       source: "hackernews",
@@ -93,7 +97,9 @@ describe("enrichSection：Hacker News 元信息与去重", () => {
     };
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
 
     const en = result.items[0]!.en;
     expect(en).not.toContain("1027");
@@ -119,7 +125,9 @@ describe("enrichSection：Hacker News 元信息与去重", () => {
     };
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]!.en).toBe("The resolver is leaving France");
     await rm(dir, { recursive: true, force: true });
   });
@@ -134,7 +142,9 @@ describe("enrichSection：Hacker News 元信息与去重", () => {
     };
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]!.en).toBe("Some summary with 5 points mentioned.");
     await rm(dir, { recursive: true, force: true });
   });
@@ -165,7 +175,9 @@ describe("enrichSection：Twitter 推文直链", () => {
     };
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "categories") return;
+    if (result.kind !== "categories") {
+      return;
+    }
     expect(result.categories[0]?.items[0]?.url).toBe("https://x.com/simonw/status/2113071390601458152");
     await rm(dir, { recursive: true, force: true });
   });
@@ -180,7 +192,9 @@ describe("enrichSection：Twitter 推文直链", () => {
     };
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "categories") return;
+    if (result.kind !== "categories") {
+      return;
+    }
     expect(result.categories[0]?.items[0]?.url).toBe("https://x.com/simonw");
     await rm(dir, { recursive: true, force: true });
   });
@@ -197,7 +211,9 @@ describe("enrichSection：缺原始数据", () => {
     };
 
     const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]?.meta).toBeUndefined();
     await rm(dir, { recursive: true, force: true });
   });
@@ -221,7 +237,9 @@ describe("limitSectionItems", () => {
     };
     const limited = limitSectionItems(section);
     expect(limited.kind).toBe("items");
-    if (limited.kind !== "items") return;
+    if (limited.kind !== "items") {
+      return;
+    }
     expect(limited.items.length).toBe(10);
     // 保留的是前 10 条，顺序不变
     expect(limited.items[0]?.title).toBe("item-0");
@@ -236,7 +254,9 @@ describe("limitSectionItems", () => {
       items: [item("a"), item("b")],
     };
     const limited = limitSectionItems(section);
-    if (limited.kind !== "items") throw new Error("kind changed");
+    if (limited.kind !== "items") {
+      throw new Error("kind changed");
+    }
     expect(limited.items.length).toBe(2);
   });
 

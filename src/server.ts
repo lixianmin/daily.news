@@ -117,7 +117,9 @@ export async function buildApp(options: ServerOptions = {}) {
   app.get("/d/:date", async (c) => {
     const date = c.req.param("date");
     const day = await store.readDay(date);
-    if (day === null) return c.html(renderNotFound(date), 404);
+    if (day === null) {
+      return c.html(renderNotFound(date), 404);
+    }
 
     // 前后日导航 + 侧边栏的历史列表
     const index = await store.readIndex();
@@ -146,7 +148,9 @@ export async function buildApp(options: ServerOptions = {}) {
 
   app.get("/api/day/:date", async (c) => {
     const day = await store.readDay(c.req.param("date"));
-    if (day === null) return jsonError("没有这一天的数据", 404);
+    if (day === null) {
+      return jsonError("没有这一天的数据", 404);
+    }
     return c.json(day);
   });
 
@@ -166,10 +170,14 @@ export async function buildApp(options: ServerOptions = {}) {
     }
     const body = await c.req.json().catch(() => ({}));
     const requested = typeof body?.date === "string" && body.date !== "" ? body.date : todayInShanghai();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(requested)) return jsonError("日期格式应为 YYYY-MM-DD", 400);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(requested)) {
+      return jsonError("日期格式应为 YYYY-MM-DD", 400);
+    }
 
     const result = await scheduler.regenerate(requested);
-    if (!result.started) return c.json({ started: false, reason: result.reason }, 409);
+    if (!result.started) {
+      return c.json({ started: false, reason: result.reason }, 409);
+    }
     logger.info("regenerate accepted", { date: requested });
     return c.json({ started: true, date: requested });
   });
@@ -182,7 +190,9 @@ export async function buildApp(options: ServerOptions = {}) {
         let closed = false;
 
         const push = (event: ProgressEvent, live: boolean): void => {
-          if (closed) return;
+          if (closed) {
+            return;
+          }
           try {
             // live 标记让客户端能区分「实时事件」与「历史重放」：
             // 只有实时的 done 才触发页面刷新，否则每次加载都会刷新一次。
@@ -196,11 +206,15 @@ export async function buildApp(options: ServerOptions = {}) {
         // 新连接先补齐最近的事件，页面不必等下一步才知道在干什么。
         // 这些是历史快照（live=false），不能触发客户端的刷新动作。
         push({ stage: "fetch", message: "已连接", at: new Date().toISOString() }, false);
-        for (const event of scheduler.recentEvents()) push(event, false);
+        for (const event of scheduler.recentEvents()) {
+          push(event, false);
+        }
 
         const unsubscribe = scheduler.subscribe((event) => push(event, true));
         const heartbeat = setInterval(() => {
-          if (closed) return;
+          if (closed) {
+            return;
+          }
           try {
             controller.enqueue(encoder.encode(": ping\n\n"));
           } catch {
@@ -209,7 +223,9 @@ export async function buildApp(options: ServerOptions = {}) {
         }, SSE_HEARTBEAT_MS);
 
         const cleanup = (): void => {
-          if (closed) return;
+          if (closed) {
+            return;
+          }
           closed = true;
           clearInterval(heartbeat);
           unsubscribe();

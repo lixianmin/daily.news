@@ -32,9 +32,13 @@ async function buildMetaIndexes(runsDir: string): Promise<{
     const ghRaw = await readFile(join(runsDir, SOURCE_FILES.github), "utf8");
     for (const line of ghRaw.split("\n")) {
       const titleMatch = /^- \*\*(.+?)\*\*/.exec(line);
-      if (titleMatch === null) continue;
+      if (titleMatch === null) {
+        continue;
+      }
       const meta = parseGithubMeta(line);
-      if (meta !== null) github.set(titleMatch[1] ?? "", meta);
+      if (meta !== null) {
+        github.set(titleMatch[1] ?? "", meta);
+      }
     }
   } catch {
     // 没有 gh.md 就跳过
@@ -44,11 +48,15 @@ async function buildMetaIndexes(runsDir: string): Promise<{
     const hnRaw = await readFile(join(runsDir, SOURCE_FILES.hackernews), "utf8");
     for (const line of hnRaw.split("\n")) {
       const titleMatch = /^- \*\*(.+?)\*\*/.exec(line);
-      if (titleMatch === null) continue;
+      if (titleMatch === null) {
+        continue;
+      }
       const title = titleMatch[1] ?? "";
 
       const meta = extractHnMeta(line);
-      if (meta !== null) hn.set(title, meta);
+      if (meta !== null) {
+        hn.set(title, meta);
+      }
 
       // HN 有两个链接：原文 + 讨论页
       const extra: Array<{ label: string; url: string }> = [];
@@ -56,7 +64,9 @@ async function buildMetaIndexes(runsDir: string): Promise<{
       if (discussion !== null) {
         extra.push({ label: "讨论", url: discussion[1] ?? "" });
       }
-      if (extra.length > 0) hnExtra.set(title, extra);
+      if (extra.length > 0) {
+        hnExtra.set(title, extra);
+      }
     }
   } catch {
     // 没有 hn.md 就跳过
@@ -72,7 +82,9 @@ async function buildMetaIndexes(runsDir: string): Promise<{
  * 作为 chip 显示在标题下方了。留着就是同一屏里说两遍。
  */
 function stripRedundantMeta(text: string, meta: ItemMeta | undefined): string {
-  if (meta === undefined || meta.source !== "hackernews") return text;
+  if (meta === undefined || meta.source !== "hackernews") {
+    return text;
+  }
 
   const { points, comments } = meta.hn;
   let out = text;
@@ -111,8 +123,12 @@ export const MAX_ITEMS_PER_SOURCE = 10;
  * Twitter 不受这个限制——它是分主题归纳的要点，不是逐条列表。
  */
 export function limitSectionItems(section: DigestSection): DigestSection {
-  if (section.kind !== "items") return section;
-  if (section.items.length <= MAX_ITEMS_PER_SOURCE) return section;
+  if (section.kind !== "items") {
+    return section;
+  }
+  if (section.items.length <= MAX_ITEMS_PER_SOURCE) {
+    return section;
+  }
   return {
     ...section,
     items: section.items.slice(0, MAX_ITEMS_PER_SOURCE),
@@ -137,7 +153,9 @@ export async function enrichSection(
   for (const item of section.items) {
     if (section.key === "github") {
       const meta = github.get(item.title);
-      if (meta !== undefined && meta !== null) item.meta = { source: "github", github: meta };
+      if (meta !== undefined && meta !== null) {
+        item.meta = { source: "github", github: meta };
+      }
       continue;
     }
     if (section.key === "hackernews") {
@@ -150,7 +168,9 @@ export async function enrichSection(
         item.zh = stripRedundantMeta(item.zh, item.meta);
       }
       const extra = hnExtra.get(item.title);
-      if (extra !== undefined) item.extraLinks = extra;
+      if (extra !== undefined) {
+        item.extraLinks = extra;
+      }
     }
   }
 
@@ -164,18 +184,26 @@ export async function enrichSection(
  * 有 `x.com/<handle>/status/<id>`（那条推文本身），用 handle 反查替换。
  */
 async function enrichTwitter(section: DigestSection, options: EnrichOptions): Promise<void> {
-  if (section.kind !== "categories") return;
+  if (section.kind !== "categories") {
+    return;
+  }
 
   let links: Map<string, string> | undefined;
   for (const category of section.categories) {
     for (const item of category.items) {
-      if (item.url === undefined) continue;
+      if (item.url === undefined) {
+        continue;
+      }
       const handle = /\/x\.com\/([A-Za-z0-9_]+)$/.exec(item.url)?.[1];
-      if (handle === undefined) continue;
+      if (handle === undefined) {
+        continue;
+      }
 
       links ??= await loadTwitterLinks(options);
       const direct = links.get(handle);
-      if (direct !== undefined) item.url = direct;
+      if (direct !== undefined) {
+        item.url = direct;
+      }
     }
   }
 }

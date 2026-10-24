@@ -29,22 +29,34 @@ async function googleTranslate(text: string): Promise<string> {
     body: body.toString(),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`google http ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`google http ${response.status}`);
+  }
 
   const payload: unknown = await response.json();
   // 返回形如 [[["译文","原文",null,null,10], ...], null, "en", ...]
-  if (!Array.isArray(payload)) throw new Error("google 响应结构异常");
+  if (!Array.isArray(payload)) {
+    throw new Error("google 响应结构异常");
+  }
   const segments = payload[0];
-  if (!Array.isArray(segments)) throw new Error("google 分段缺失");
+  if (!Array.isArray(segments)) {
+    throw new Error("google 分段缺失");
+  }
 
   const parts: string[] = [];
   for (const segment of segments) {
-    if (!Array.isArray(segment)) continue;
+    if (!Array.isArray(segment)) {
+      continue;
+    }
     const piece = segment[0];
-    if (typeof piece === "string" && piece !== "") parts.push(piece);
+    if (typeof piece === "string" && piece !== "") {
+      parts.push(piece);
+    }
   }
   const joined = parts.join("");
-  if (joined === "") throw new Error("google 返回空译文");
+  if (joined === "") {
+    throw new Error("google 返回空译文");
+  }
   return joined;
 }
 
@@ -58,13 +70,17 @@ async function myMemoryTranslate(text: string): Promise<string> {
     headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`mymemory http ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`mymemory http ${response.status}`);
+  }
 
   const payload = (await response.json()) as {
     responseData?: { translatedText?: unknown };
     quotaFinished?: unknown;
   };
-  if (payload.quotaFinished === true) throw new Error("mymemory 配额用尽");
+  if (payload.quotaFinished === true) {
+    throw new Error("mymemory 配额用尽");
+  }
 
   const translated = payload.responseData?.translatedText;
   if (typeof translated !== "string" || translated.trim() === "") {

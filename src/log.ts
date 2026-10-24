@@ -22,7 +22,9 @@ export function logDir(dataDir: string = DATA_DIR): string {
 /** 取某个数据目录对应的日志器；第一次调用时挂上文件 sink。 */
 export function log(dataDir: string = DATA_DIR): Logger {
   const cached = cache.get(dataDir);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
 
   const logger = newLogger({ name: "daily.news" });
   logger.addSink(createFileSink({ dir: join(dataDir, "logs") }));
@@ -37,6 +39,8 @@ export function logFiles(dataDir: string = DATA_DIR) {
 
 /** 退出前冲掉缓冲区（info 是攒批写的，不 dispose 会丢最后一批）。 */
 export function flushLogs(): void {
-  for (const logger of cache.values()) logger.dispose();
+  for (const logger of cache.values()) {
+    logger.dispose();
+  }
   cache.clear();
 }

@@ -37,7 +37,9 @@ export const FALLBACK_MODEL = process.env["FALLBACK_MODEL"] ?? "glm-5.3-flash";
 /** pi 可执行文件：优先自托管版（随 pi 升级），回落 brew 版。 */
 export function piBin(): string {
   const explicit = process.env["PI_BIN"];
-  if (explicit !== undefined && explicit !== "") return explicit;
+  if (explicit !== undefined && explicit !== "") {
+    return explicit;
+  }
   return join(homedir(), ".pi", "agent", "bin", "pi");
 }
 
@@ -86,7 +88,9 @@ export function todayInShanghai(now: Date = new Date()): string {
  */
 export function formatShanghai(iso: string, withMinutes = true): string {
   const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return "";
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
   const shifted = new Date(parsed.getTime() + TZ_OFFSET_MS).toISOString();
   return withMinutes ? shifted.slice(0, 16).replace("T", " ") : shifted.slice(0, 10);
 }
@@ -115,7 +119,9 @@ export function msUntilNextShanghaiHour(hour: number, now: Date = new Date()): n
   );
   let delta = target - shifted.getTime();
   // 已过今天的点，就等明天
-  if (delta <= 0) delta += 24 * 60 * 60 * 1000;
+  if (delta <= 0) {
+    delta += 24 * 60 * 60 * 1000;
+  }
   return delta;
 }
 
@@ -124,7 +130,9 @@ const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;
 /** 把 `YYYY-MM-DD` 换成 "星期五"。解析失败返回空串。 */
 export function weekdayOf(date: string): string {
   const parsed = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return "";
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
   const index = parsed.getUTCDay();
   const name = WEEKDAYS[index];
   return name === undefined ? "" : `星期${name}`;

@@ -13,7 +13,9 @@ describe("parseSection：围栏与噪音", () => {
       "github",
     );
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
     expect(result.section.kind).toBe("items");
   });
 
@@ -44,14 +46,18 @@ describe("parseSection：结构兼容", () => {
     const raw = JSON.stringify([{ title: "a/b", en: "Does things." }]);
     const result = parseSection(raw, "github");
     expect(result.ok).toBe(true);
-    if (!result.ok || result.section.kind !== "items") return;
+    if (!result.ok || result.section.kind !== "items") {
+      return;
+    }
     expect(result.section.items[0]?.title).toBe("a/b");
   });
 
   it("items 里的 url 缺省时不报错", () => {
     const result = parseSection(itemsJson([{ title: "a/b", en: "Does things." }]), "github");
     expect(result.ok).toBe(true);
-    if (!result.ok || result.section.kind !== "items") return;
+    if (!result.ok || result.section.kind !== "items") {
+      return;
+    }
     expect(result.section.items[0]?.url).toBeUndefined();
   });
 
@@ -64,7 +70,9 @@ describe("parseSection：结构兼容", () => {
       "github",
     );
     expect(result.ok).toBe(true);
-    if (!result.ok || result.section.kind !== "items") return;
+    if (!result.ok || result.section.kind !== "items") {
+      return;
+    }
     expect(result.section.items).toHaveLength(2);
     expect(result.section.items[0]?.url).toBeUndefined();
   });
@@ -81,7 +89,9 @@ describe("parseSection：条目校验", () => {
       "github",
     );
     expect(result.ok).toBe(true);
-    if (!result.ok || result.section.kind !== "items") return;
+    if (!result.ok || result.section.kind !== "items") {
+      return;
+    }
     expect(result.section.items).toHaveLength(1);
     expect(result.section.items[0]?.title).toBe("good");
   });
@@ -94,7 +104,9 @@ describe("parseSection：条目校验", () => {
   it("zh 初始化为空串（中文由机翻填充，模型不产）", () => {
     const result = parseSection(itemsJson([{ title: "a/b", en: "Does things." }]), "github");
     expect(result.ok).toBe(true);
-    if (!result.ok || result.section.kind !== "items") return;
+    if (!result.ok || result.section.kind !== "items") {
+      return;
+    }
     expect(result.section.items[0]?.zh).toBe("");
   });
 
@@ -121,7 +133,9 @@ describe("parseSection：Twitter 分类结构", () => {
   it("解析 categories 并用标题作为条目 title", () => {
     const result = parseSection(categoriesRaw, "twitter");
     expect(result.ok).toBe(true);
-    if (!result.ok || result.section.kind !== "categories") return;
+    if (!result.ok || result.section.kind !== "categories") {
+      return;
+    }
     expect(result.section.categories).toHaveLength(1);
     expect(result.section.categories[0]?.title).toBe("AI Models & Benchmarks");
     expect(result.section.categories[0]?.items).toHaveLength(2);
@@ -129,13 +143,17 @@ describe("parseSection：Twitter 分类结构", () => {
 
   it("从 handles 推出 x.com 链接", () => {
     const result = parseSection(categoriesRaw, "twitter");
-    if (!result.ok || result.section.kind !== "categories") return;
+    if (!result.ok || result.section.kind !== "categories") {
+      return;
+    }
     expect(result.section.categories[0]?.items[0]?.url).toBe("https://x.com/simonw");
   });
 
   it("空分类被丢弃；全部为空时判失败", () => {
     const result = parseSection(categoriesRaw, "twitter");
-    if (!result.ok || result.section.kind !== "categories") return;
+    if (!result.ok || result.section.kind !== "categories") {
+      return;
+    }
     expect(result.section.categories.map((c) => c.title)).not.toContain("Empty Category");
 
     const empty = JSON.stringify({ categories: [{ title: "Only Empty", items: [] }] });
@@ -145,7 +163,9 @@ describe("parseSection：Twitter 分类结构", () => {
   it("章节标题由代码填充，不信任模型给的 title", () => {
     const raw = JSON.stringify({ title: "模型乱写的标题", items: [{ title: "a/b", en: "Fine." }] });
     const result = parseSection(raw, "github");
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
     expect(result.section.title).toBe("GitHub Trending（今日趨勢）");
   });
 });
@@ -168,14 +188,18 @@ describe("parseSection：彻底非法", () => {
     const dsml = '<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name="read">\n</｜｜DSML｜｜ calls>';
     const result = parseSection(dsml, "twitter");
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok) {
+      return;
+    }
     expect(result.error).toContain("工具调用");
   });
 
   it("失败时带可读的 error 字符串", () => {
     const result = parseSection("不是 JSON", "github");
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok) {
+      return;
+    }
     expect(result.error.length).toBeGreaterThan(0);
   });
 });

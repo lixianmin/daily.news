@@ -55,7 +55,9 @@ async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
 }
 
 function isDigestDay(value: unknown): value is DigestDay {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
   const record = value as Record<string, unknown>;
   return typeof record["date"] === "string" && Array.isArray(record["sections"]);
 }
@@ -82,12 +84,16 @@ function pickHeadlines(day: DigestDay): string[] {
   for (const section of day.sections) {
     if (section.kind === "items") {
       for (const item of section.items) {
-        if (headlines.length >= 6) return headlines;
+        if (headlines.length >= 6) {
+          return headlines;
+        }
         headlines.push(item.title);
       }
     } else {
       for (const category of section.categories) {
-        if (headlines.length >= 6) return headlines;
+        if (headlines.length >= 6) {
+          return headlines;
+        }
         headlines.push(category.title);
       }
     }
@@ -144,7 +150,9 @@ async function rebuildIndex(dataDir: string, dates: string[]): Promise<DigestInd
   const days: IndexDay[] = [];
   for (const date of dates) {
     const day = await readDayFile(dataDir, date);
-    if (day !== null) days.push(toIndexDay(day));
+    if (day !== null) {
+      days.push(toIndexDay(day));
+    }
   }
   return { updatedAt: new Date().toISOString(), days };
 }
@@ -173,7 +181,9 @@ export function createStore(options: StoreOptions): Store {
       try {
         const raw = await readFile(indexPath(dataDir), "utf8");
         const parsed = JSON.parse(raw) as DigestIndex;
-        if (!Array.isArray(parsed.days)) throw new Error("bad index shape");
+        if (!Array.isArray(parsed.days)) {
+          throw new Error("bad index shape");
+        }
 
         // 索引与磁盘对不上（旧索引 / 历史遗留文件）时重建，别让列表页显示残缺
         const indexed = parsed.days.map((entry) => entry.date).sort().reverse();
@@ -192,39 +202,55 @@ export function createStore(options: StoreOptions): Store {
 
     async search(query, limit = DEFAULT_SEARCH_LIMIT) {
       const needle = query.trim().toLowerCase();
-      if (needle === "") return [];
+      if (needle === "") {
+        return [];
+      }
 
       const hits: SearchHit[] = [];
       for (const date of await scanDates(dataDir)) {
         const day = await readDayFile(dataDir, date);
-        if (day === null) continue;
+        if (day === null) {
+          continue;
+        }
 
         for (const section of day.sections) {
           if (section.kind === "items") {
             for (const item of section.items) {
-              if (hits.length >= limit) return hits;
-              if (!matches(needle, [item.title, item.en])) continue;
+              if (hits.length >= limit) {
+                return hits;
+              }
+              if (!matches(needle, [item.title, item.en])) {
+                continue;
+              }
               const hit: SearchHit = {
                 date,
                 section: section.title,
                 title: item.title,
                 en: item.en,
               };
-              if (item.url !== undefined) hit.url = item.url;
+              if (item.url !== undefined) {
+                hit.url = item.url;
+              }
               hits.push(hit);
             }
           } else {
             for (const category of section.categories) {
               for (const item of category.items) {
-                if (hits.length >= limit) return hits;
-                if (!matches(needle, [category.title, item.en])) continue;
+                if (hits.length >= limit) {
+                  return hits;
+                }
+                if (!matches(needle, [category.title, item.en])) {
+                  continue;
+                }
                 const hit: SearchHit = {
                   date,
                   section: section.title,
                   title: category.title,
                   en: item.en,
                 };
-                if (item.url !== undefined) hit.url = item.url;
+                if (item.url !== undefined) {
+                  hit.url = item.url;
+                }
                 hits.push(hit);
               }
             }

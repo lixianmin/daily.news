@@ -30,7 +30,9 @@ export interface HnMeta {
  */
 export function parseGithubMeta(line: string): GithubMeta | null {
   const metaMatch = /（([^）]*)）/.exec(line);
-  if (metaMatch === null) return null;
+  if (metaMatch === null) {
+    return null;
+  }
 
   const parts = (metaMatch[1] ?? "")
     .split("·")
@@ -66,10 +68,14 @@ export function parseGithubMeta(line: string): GithubMeta | null {
  */
 export function extractHnMeta(line: string): HnMeta | null {
   const match = /\((\d+)★\s*·\s*(\d+)則評論\)/.exec(line);
-  if (match === null) return null;
+  if (match === null) {
+    return null;
+  }
   const points = Number(match[1]);
   const comments = Number(match[2]);
-  if (!Number.isFinite(points) || !Number.isFinite(comments)) return null;
+  if (!Number.isFinite(points) || !Number.isFinite(comments)) {
+    return null;
+  }
   return { points, comments };
 }
 
@@ -85,17 +91,25 @@ export function extractHnMeta(line: string): HnMeta | null {
  */
 export function extractTwitterLinks(raw: string): Map<string, string> {
   const links = new Map<string, string>();
-  if (raw === "") return links;
+  if (raw === "") {
+    return links;
+  }
 
   // 脚注行：`[12] https://x.com/foo/status/123`
   const footnote = /^\[(\d+)\]\s+(\S+)\s*$/gm;
   for (const match of raw.matchAll(footnote)) {
     const url = match[2] ?? "";
-    if (!/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(url)) continue;
+    if (!/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(url)) {
+      continue;
+    }
     const handle = /\/x\.com\/([A-Za-z0-9_]+)\/status\//.exec(url)?.[1];
-    if (handle === undefined) continue;
+    if (handle === undefined) {
+      continue;
+    }
     // 先出现的优先
-    if (!links.has(handle)) links.set(handle, url);
+    if (!links.has(handle)) {
+      links.set(handle, url);
+    }
   }
 
   return links;

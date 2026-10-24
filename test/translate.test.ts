@@ -46,7 +46,9 @@ describe("translateSection：items", () => {
     const result = await translateSection(itemsSection, { translator: fake.translator, concurrency: 1 });
 
     expect(result.kind).toBe("items");
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]?.zh).toBe("【译】A fast CLI for X.");
     expect(result.items[1]?.zh).toBe("【译】A Python library.");
     expect(fake.calls).toHaveLength(2);
@@ -61,7 +63,9 @@ describe("translateSection：items", () => {
   it("标题与链接不受影响", async () => {
     const fake = fakeTranslator();
     const result = await translateSection(itemsSection, { translator: fake.translator, concurrency: 1 });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]?.title).toBe("owner/repo");
     expect(result.items[0]?.url).toBe("https://github.com/owner/repo");
   });
@@ -78,7 +82,9 @@ describe("translateSection：items", () => {
       ],
     };
     const result = await translateSection(section, { translator: fake.translator, concurrency: 1 });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]?.zh).toBe("一個快速的 CLI。");
     expect(result.items[1]?.zh).toBe("【译】Another thing.");
     expect(fake.calls).toHaveLength(1);
@@ -107,7 +113,9 @@ describe("translateSection：categories", () => {
     const result = await translateSection(categoriesSection, { translator: fake.translator, concurrency: 1 });
 
     expect(result.kind).toBe("categories");
-    if (result.kind !== "categories") return;
+    if (result.kind !== "categories") {
+      return;
+    }
     const category = result.categories[0]!;
     expect(category.titleZh).toBe("【译】AI Models & Benchmarks");
     expect(category.items[0]?.zh).toBe("【译】@simonw benchmarked Qwen.");
@@ -117,7 +125,9 @@ describe("translateSection：categories", () => {
   it("英文分类标题原文保留（分类靠 title 排序与展示）", async () => {
     const fake = fakeTranslator();
     const result = await translateSection(categoriesSection, { translator: fake.translator, concurrency: 1 });
-    if (result.kind !== "categories") return;
+    if (result.kind !== "categories") {
+      return;
+    }
     expect(result.categories[0]?.title).toBe("AI Models & Benchmarks");
   });
 });
@@ -126,13 +136,17 @@ describe("translateSection：失败容错", () => {
   it("单条翻译失败时 zh 留空，其余继续", async () => {
     const result = await translateSection(itemsSection, {
       translator: async (text) => {
-        if (text.includes("Python")) throw new Error("quota exceeded");
+        if (text.includes("Python")) {
+          throw new Error("quota exceeded");
+        }
         return `【译】${text}`;
       },
       concurrency: 1,
     });
 
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]?.zh).toBe("【译】A fast CLI for X.");
     expect(result.items[1]?.zh).toBe("");
   });
@@ -142,7 +156,9 @@ describe("translateSection：失败容错", () => {
       translator: async () => "   ",
       concurrency: 1,
     });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items[0]?.zh).toBe("");
   });
 
@@ -153,7 +169,9 @@ describe("translateSection：失败容错", () => {
       },
       concurrency: 1,
     });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items.map((i) => i.zh)).toEqual(["", ""]);
   });
 });
@@ -175,7 +193,9 @@ describe("translateSection：进度与并发", () => {
   it("并发数 > 1 时全部条目仍被翻译", async () => {
     const fake = fakeTranslator();
     const result = await translateSection(itemsSection, { translator: fake.translator, concurrency: 4 });
-    if (result.kind !== "items") return;
+    if (result.kind !== "items") {
+      return;
+    }
     expect(result.items.every((item) => item.zh.startsWith("【译】"))).toBe(true);
   });
 });

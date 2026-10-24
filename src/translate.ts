@@ -23,7 +23,9 @@ const DEFAULT_CONCURRENCY = 3;
  */
 export function needsTranslation(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed === "") return false;
+  if (trimmed === "") {
+    return false;
+  }
   return !CJK.test(trimmed);
 }
 
@@ -37,14 +39,20 @@ function collectTexts(section: DigestSection): string[] {
   const texts: string[] = [];
   if (section.kind === "items") {
     for (const item of section.items) {
-      if (item.zh === "" && needsTranslation(item.en)) texts.push(item.en);
+      if (item.zh === "" && needsTranslation(item.en)) {
+        texts.push(item.en);
+      }
     }
     return texts;
   }
   for (const category of section.categories) {
-    if (category.titleZh === "" && needsTranslation(category.title)) texts.push(category.title);
+    if (category.titleZh === "" && needsTranslation(category.title)) {
+      texts.push(category.title);
+    }
     for (const item of category.items) {
-      if (item.zh === "" && needsTranslation(item.en)) texts.push(item.en);
+      if (item.zh === "" && needsTranslation(item.en)) {
+        texts.push(item.en);
+      }
     }
   }
   return texts;
@@ -64,7 +72,9 @@ async function runPool<T>(
       const index = cursor;
       cursor += 1;
       const task = tasks[index];
-      if (task === undefined) return;
+      if (task === undefined) {
+        return;
+      }
       if (delayMs > 0 && index > 0) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
@@ -98,7 +108,9 @@ export async function translateSection(
     try {
       const translated = await options.translator(text);
       const trimmed = translated.trim();
-      if (trimmed !== "") translations.set(text, trimmed);
+      if (trimmed !== "") {
+        translations.set(text, trimmed);
+      }
     } catch {
       // 失败就留空，translations 里没有这条
     }
@@ -114,9 +126,15 @@ export async function translateSection(
     const items: DigestItem[] = section.items.map((item) => {
       const zh = item.zh === "" && needsTranslation(item.en) ? translateZh(item.en) : item.zh;
       const next: DigestItem = { title: item.title, en: item.en, zh };
-      if (item.url !== undefined) next.url = item.url;
-      if (item.meta !== undefined) next.meta = item.meta;
-      if (item.extraLinks !== undefined) next.extraLinks = item.extraLinks;
+      if (item.url !== undefined) {
+        next.url = item.url;
+      }
+      if (item.meta !== undefined) {
+        next.meta = item.meta;
+      }
+      if (item.extraLinks !== undefined) {
+        next.extraLinks = item.extraLinks;
+      }
       return next;
     });
     return { key: section.key, title: section.title, kind: "items", items };
@@ -131,7 +149,9 @@ export async function translateSection(
     const items: CategoryItem[] = category.items.map((item) => {
       const zh = item.zh === "" && needsTranslation(item.en) ? translateZh(item.en) : item.zh;
       const next: CategoryItem = { en: item.en, zh };
-      if (item.url !== undefined) next.url = item.url;
+      if (item.url !== undefined) {
+        next.url = item.url;
+      }
       return next;
     });
 

@@ -27,7 +27,9 @@ function stripFence(text: string): string {
  */
 function extractBalanced(text: string): string | null {
   const start = text.search(/[{[]/);
-  if (start === -1) return null;
+  if (start === -1) {
+    return null;
+  }
   const open = text[start];
   const close = open === "{" ? "}" : "]";
 
@@ -38,19 +40,26 @@ function extractBalanced(text: string): string | null {
   for (let i = start; i < text.length; i += 1) {
     const ch = text[i];
     if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === "\\") escaped = true;
-      else if (ch === '"') inString = false;
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
       continue;
     }
     if (ch === '"') {
       inString = true;
       continue;
     }
-    if (ch === open) depth += 1;
-    else if (ch === close) {
+    if (ch === open) {
+      depth += 1;
+    } else if (ch === close) {
       depth -= 1;
-      if (depth === 0) return text.slice(start, i + 1);
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
     }
   }
   return null;
@@ -90,17 +99,23 @@ function looksLikeToolCall(text: string): boolean {
 
 /** 只接受 http(s)。模型偶尔会写相对路径或 javascript: 之类的脏值。 */
 function normalizeUrl(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
   const trimmed = value.trim();
   return /^https?:\/\//i.test(trimmed) ? trimmed : undefined;
 }
 
 /** 从对象里取指定名字的数组；顶层本身就是数组时直接用它。 */
 function pickArray(value: unknown, field: string): unknown[] {
-  if (Array.isArray(value)) return value;
+  if (Array.isArray(value)) {
+    return value;
+  }
   if (typeof value === "object" && value !== null) {
     const inner = (value as Record<string, unknown>)[field];
-    if (Array.isArray(inner)) return inner;
+    if (Array.isArray(inner)) {
+      return inner;
+    }
   }
   return [];
 }
@@ -120,14 +135,20 @@ function asItems(value: unknown): DigestItem[] {
   const items: DigestItem[] = [];
   for (const raw of pickArray(value, "items")) {
     const record = asRecord(raw);
-    if (record === undefined) continue;
+    if (record === undefined) {
+      continue;
+    }
     const title = trimmedString(record["title"]);
     const en = trimmedString(record["en"]);
-    if (title === "" || en === "") continue;
+    if (title === "" || en === "") {
+      continue;
+    }
 
     const item: DigestItem = { title, en, zh: "" };
     const url = normalizeUrl(record["url"]);
-    if (url !== undefined) item.url = url;
+    if (url !== undefined) {
+      item.url = url;
+    }
     items.push(item);
   }
   return items;
@@ -136,15 +157,23 @@ function asItems(value: unknown): DigestItem[] {
 /** Twitter 条目的链接：优先用显式 url，否则从 handles[0] 推作者主页。 */
 function categoryItemUrl(record: Record<string, unknown>): string | undefined {
   const direct = normalizeUrl(record["url"]);
-  if (direct !== undefined) return direct;
+  if (direct !== undefined) {
+    return direct;
+  }
 
   const handles = record["handles"];
-  if (!Array.isArray(handles)) return undefined;
+  if (!Array.isArray(handles)) {
+    return undefined;
+  }
   for (const handle of handles) {
-    if (typeof handle !== "string") continue;
+    if (typeof handle !== "string") {
+      continue;
+    }
     const name = handle.trim().replace(/^@/, "");
     // X 的用户名限 15 字符、只含字母数字下划线
-    if (/^[A-Za-z0-9_]{1,15}$/.test(name)) return `https://x.com/${name}`;
+    if (/^[A-Za-z0-9_]{1,15}$/.test(name)) {
+      return `https://x.com/${name}`;
+    }
   }
   return undefined;
 }
@@ -153,13 +182,19 @@ function asCategoryItems(value: unknown): CategoryItem[] {
   const items: CategoryItem[] = [];
   for (const raw of pickArray(value, "items")) {
     const record = asRecord(raw);
-    if (record === undefined) continue;
+    if (record === undefined) {
+      continue;
+    }
     const en = trimmedString(record["en"]);
-    if (en === "") continue;
+    if (en === "") {
+      continue;
+    }
 
     const item: CategoryItem = { en, zh: "" };
     const url = categoryItemUrl(record);
-    if (url !== undefined) item.url = url;
+    if (url !== undefined) {
+      item.url = url;
+    }
     items.push(item);
   }
   return items;
@@ -170,12 +205,18 @@ function asCategories(value: unknown): DigestCategory[] {
   const categories: DigestCategory[] = [];
   for (const raw of pickArray(value, "categories")) {
     const record = asRecord(raw);
-    if (record === undefined) continue;
+    if (record === undefined) {
+      continue;
+    }
     const title = trimmedString(record["title"]);
-    if (title === "") continue;
+    if (title === "") {
+      continue;
+    }
 
     const items = asCategoryItems(record["items"]);
-    if (items.length === 0) continue;
+    if (items.length === 0) {
+      continue;
+    }
     categories.push({ title, titleZh: "", items });
   }
   return categories;
@@ -189,7 +230,9 @@ function asCategories(value: unknown): DigestCategory[] {
  */
 export function parseSection(raw: string, key: SourceKey): ParseOutcome {
   const text = raw.trim();
-  if (text === "") return { ok: false, error: "空响应" };
+  if (text === "") {
+    return { ok: false, error: "空响应" };
+  }
 
   if (looksLikeToolCall(text)) {
     return {
@@ -199,20 +242,28 @@ export function parseSection(raw: string, key: SourceKey): ParseOutcome {
   }
 
   const balanced = extractBalanced(stripFence(text));
-  if (balanced === null) return { ok: false, error: "响应里找不到 JSON 对象或数组" };
+  if (balanced === null) {
+    return { ok: false, error: "响应里找不到 JSON 对象或数组" };
+  }
 
   const parsed = tryParse(balanced);
-  if (parsed === undefined) return { ok: false, error: "JSON 解析失败" };
+  if (parsed === undefined) {
+    return { ok: false, error: "JSON 解析失败" };
+  }
 
   const title = SOURCE_TITLES[key];
 
   if (key === "twitter") {
     const categories = asCategories(parsed);
-    if (categories.length === 0) return { ok: false, error: "没有有效分类" };
+    if (categories.length === 0) {
+      return { ok: false, error: "没有有效分类" };
+    }
     return { ok: true, section: { key, title, kind: "categories", categories } };
   }
 
   const items = asItems(parsed);
-  if (items.length === 0) return { ok: false, error: "没有有效条目" };
+  if (items.length === 0) {
+    return { ok: false, error: "没有有效条目" };
+  }
   return { ok: true, section: { key, title, kind: "items", items } };
 }

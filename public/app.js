@@ -17,11 +17,15 @@
   // 中英两列一起展开/收起——它们是同一句话的两种语言，展开一半会看不懂
   document.addEventListener("click", (event) => {
     const button = event.target instanceof Element ? event.target.closest(".expand-btn") : null;
-    if (button === null) return;
+    if (button === null) {
+      return;
+    }
 
     const card = button.closest(".card");
     const summary = card?.querySelector(".card-sum");
-    if (summary === null || summary === undefined) return;
+    if (summary === null || summary === undefined) {
+      return;
+    }
 
     const clamped = summary.classList.toggle("clamp");
     button.textContent = clamped ? "More ▾" : "Less ▴";
@@ -34,7 +38,9 @@
   const TOC_POS_KEY = "daily.news.toc.pos";
 
   function openToc() {
-    if ($tocFloat === null) return;
+    if ($tocFloat === null) {
+      return;
+    }
     $tocFloat.hidden = false;
     $tocFab?.setAttribute("aria-expanded", "true");
     // 浮窗顶部超出屏幕时，把 dock 往下推——
@@ -72,16 +78,23 @@
   }
 
   function closeToc() {
-    if ($tocFloat === null) return;
+    if ($tocFloat === null) {
+      return;
+    }
     $tocFloat.hidden = true;
     $tocFab?.setAttribute("aria-expanded", "false");
     $tocDock?.classList.remove("drop-down");
   }
 
   function toggleToc() {
-    if ($tocFloat === null) return;
-    if ($tocFloat.hidden) openToc();
-    else closeToc();
+    if ($tocFloat === null) {
+      return;
+    }
+    if ($tocFloat.hidden) {
+      openToc();
+    } else {
+      closeToc();
+    }
   }
 
   $tocFab?.addEventListener("click", toggleToc);
@@ -92,27 +105,40 @@
     if (event.target instanceof Element && event.target.closest("a") !== null) {
       // 章节锚点跳转后要等滚动结束再关，否则会被滚动动画带跑
       const isAnchor = event.target.getAttribute("href")?.startsWith("#") === true;
-      if (isAnchor) setTimeout(closeToc, 260);
-      else closeToc();
+      if (isAnchor) {
+        setTimeout(closeToc, 260);
+      } else {
+        closeToc();
+      }
     }
   });
 
   // --- 拖动：拖 dock，按钮和浮窗一起走 ---
   function dockLeft() {
-    if ($tocDock === null) return 0;
+    if ($tocDock === null) {
+      return 0;
+    }
     // 未拖动过时用 getBoundingClientRect 拿实际位置
-    if (!$tocDock.classList.contains("dragged")) return $tocDock.getBoundingClientRect().left;
+    if (!$tocDock.classList.contains("dragged")) {
+      return $tocDock.getBoundingClientRect().left;
+    }
     return $tocDock.offsetLeft;
   }
 
   function dockTop() {
-    if ($tocDock === null) return 0;
-    if (!$tocDock.classList.contains("dragged")) return $tocDock.getBoundingClientRect().top;
+    if ($tocDock === null) {
+      return 0;
+    }
+    if (!$tocDock.classList.contains("dragged")) {
+      return $tocDock.getBoundingClientRect().top;
+    }
     return $tocDock.offsetTop;
   }
 
   function moveDock(left, top) {
-    if ($tocDock === null) return;
+    if ($tocDock === null) {
+      return;
+    }
     const maxLeft = window.innerWidth - $tocDock.offsetWidth;
     const maxTop = window.innerHeight - $tocDock.offsetHeight;
     const x = Math.max(dockMinLeft(), Math.min(left, maxLeft));
@@ -129,15 +155,21 @@
    * 浮窗打开时才收紧这个限制，关闭时按钮可以贴到任意位置。
    */
   function dockMinLeft() {
-    if ($tocFloat === null || $tocFloat.hidden) return 0;
+    if ($tocFloat === null || $tocFloat.hidden) {
+      return 0;
+    }
     const width = $tocFloat.offsetWidth || 250;
     // dock 左边 - 浮窗宽度 - 间距 >= 0
     return width + 10;
   }
 
   function saveDockPos() {
-    if ($tocDock === null) return;
-    if (!$tocDock.classList.contains("dragged")) return;
+    if ($tocDock === null) {
+      return;
+    }
+    if (!$tocDock.classList.contains("dragged")) {
+      return;
+    }
     try {
       localStorage.setItem(
         TOC_POS_KEY,
@@ -149,10 +181,14 @@
   }
 
   function restoreDockPos() {
-    if ($tocDock === null) return;
+    if ($tocDock === null) {
+      return;
+    }
     try {
       const raw = localStorage.getItem(TOC_POS_KEY);
-      if (raw === null) return;
+      if (raw === null) {
+        return;
+      }
       const pos = JSON.parse(raw);
       if (typeof pos?.left === "number" && typeof pos?.top === "number") {
         $tocDock.classList.add("dragged");
@@ -176,9 +212,15 @@
 
     handle.addEventListener("pointerdown", (event) => {
       // 点关闭按钮不触发拖动
-      if (event.target instanceof Element && event.target.closest(".toc-close") !== null) return;
-      if (event.button !== 0 && event.pointerType === "mouse") return;
-      if ($tocDock === null) return;
+      if (event.target instanceof Element && event.target.closest(".toc-close") !== null) {
+        return;
+      }
+      if (event.button !== 0 && event.pointerType === "mouse") {
+        return;
+      }
+      if ($tocDock === null) {
+        return;
+      }
 
       dragState = {
         offsetX: event.clientX - dockLeft(),
@@ -191,21 +233,29 @@
     });
 
     handle.addEventListener("pointermove", (event) => {
-      if (dragState === null) return;
+      if (dragState === null) {
+        return;
+      }
       // 移动超过阈值才算拖动，否则算点击（手抖一下不该把窗口挪走）
       const dx = Math.abs(event.clientX - (dockLeft() + dragState.offsetX));
       const dy = Math.abs(event.clientY - (dockTop() + dragState.offsetY));
-      if (!dragState.moved && dx < 3 && dy < 3) return;
+      if (!dragState.moved && dx < 3 && dy < 3) {
+        return;
+      }
       dragState.moved = true;
       moveDock(event.clientX - dragState.offsetX, event.clientY - dragState.offsetY);
     });
 
     const endDrag = () => {
-      if (dragState === null) return;
+      if (dragState === null) {
+        return;
+      }
       const moved = dragState.moved;
       dragState = null;
       handle.classList.remove("dragging");
-      if (moved) saveDockPos();
+      if (moved) {
+        saveDockPos();
+      }
     };
     handle.addEventListener("pointerup", endDrag);
     handle.addEventListener("pointercancel", endDrag);
@@ -224,7 +274,9 @@
     makeDraggable($tocHead);
   }
   // 按钮也能拖：按住挪动是拖，点一下是开合
-  if ($tocFab !== null) makeDraggable($tocFab);
+  if ($tocFab !== null) {
+    makeDraggable($tocFab);
+  }
 
   restoreDockPos();
 
@@ -238,7 +290,9 @@
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
+          if (!entry.isIntersecting) {
+            continue;
+          }
           const id = entry.target.id.replace(/^sec-/, "");
           for (const link of spyLinks) {
             link.classList.toggle("active", link.getAttribute("data-spy") === id);
@@ -247,7 +301,9 @@
       },
       { rootMargin: "-10% 0px -70% 0px" },
     );
-    for (const section of sections) observer.observe(section);
+    for (const section of sections) {
+      observer.observe(section);
+    }
   }
 
   // ---------- 搜索 ----------
@@ -283,9 +339,13 @@
     lastQuery = trimmed;
     try {
       const response = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const payload = await response.json();
-      if (lastQuery !== trimmed) return;
+      if (lastQuery !== trimmed) {
+        return;
+      }
       renderHits(payload.hits ?? []);
     } catch (error) {
       $hits.innerHTML = `<div class="empty">搜索失败：${escapeHtml(String(error))}</div>`;
@@ -330,7 +390,9 @@
   let reloading = false;
 
   function showProgress(event) {
-    if ($progress === null) return;
+    if ($progress === null) {
+      return;
+    }
     const isLive = event.live === true;
     const ratio = typeof event.ratio === "number" ? ` · ${Math.round(event.ratio * 100)}%` : "";
     // 历史事件是静态事实（比如「生成完成」），不该一直转圈——
@@ -345,7 +407,9 @@
   }
 
   function connectProgress() {
-    if (typeof EventSource === "undefined") return;
+    if (typeof EventSource === "undefined") {
+      return;
+    }
     const source = new EventSource("/api/stream");
     source.addEventListener("message", (event) => {
       try {
@@ -360,7 +424,9 @@
   let state = "idle";
 
   function syncRegenButton() {
-    if ($regen === null) return;
+    if ($regen === null) {
+      return;
+    }
     if (state === "starting") {
       $regen.disabled = true;
       $regen.textContent = "触发中…";
@@ -396,7 +462,9 @@
       }
     } catch (error) {
       state = "idle";
-      if ($progress !== null) $progress.textContent = `触发失败：${String(error)}`;
+      if ($progress !== null) {
+        $progress.textContent = `触发失败：${String(error)}`;
+      }
     }
     syncRegenButton();
   });
@@ -404,7 +472,9 @@
   async function syncInitialState() {
     try {
       const response = await fetch("/health");
-      if (!response.ok) return;
+      if (!response.ok) {
+        return;
+      }
       const health = await response.json();
       if (health.running === true) {
         state = "running";

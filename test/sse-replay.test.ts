@@ -25,13 +25,17 @@ async function startSseServer(scheduler: ReturnType<typeof createScheduler>) {
         let closed = false;
 
         const push = (event: ProgressEvent, live: boolean): void => {
-          if (closed) return;
+          if (closed) {
+            return;
+          }
           const payload = live ? { ...event, live: true } : { ...event, live: false };
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         };
 
         push({ stage: "fetch", message: "已连接", at: new Date().toISOString() }, false);
-        for (const event of scheduler.recentEvents()) push(event, false);
+        for (const event of scheduler.recentEvents()) {
+          push(event, false);
+        }
 
         const unsubscribe = scheduler.subscribe((event) => push(event, true));
         void unsubscribe;
@@ -62,21 +66,27 @@ async function readEvents(url: string, n: number, timeoutMs = 1200): Promise<Pro
 
   while (out.length < n) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
+    if (remaining <= 0) {
+      break;
+    }
 
     // 用 AbortSignal 给 read 加超时，避免永久阻塞
     const timer = new Promise<null>((resolve) =>
       setTimeout(() => resolve(null), remaining),
     );
     const chunk = await Promise.race([reader.read(), timer]);
-    if (chunk === null || chunk.done) break;
+    if (chunk === null || chunk.done) {
+      break;
+    }
 
     buffer += decoder.decode(chunk.value, { stream: true });
     let idx: number;
     while ((idx = buffer.indexOf("\n\n")) >= 0) {
       const raw = buffer.slice(0, idx);
       buffer = buffer.slice(idx + 2);
-      if (!raw.startsWith("data: ")) continue;
+      if (!raw.startsWith("data: ")) {
+        continue;
+      }
       try {
         out.push(JSON.parse(raw.slice(6)) as ProgressEvent);
       } catch {
