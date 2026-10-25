@@ -1,7 +1,7 @@
 # core 目录：通用 Hono 骨架
 
 日期：2026-10-24
-状态：待实现
+状态：已被 `2026-10-25-honox-refactor.md` 取代（`src/core/` 已删除，改用 `@needle/honox`）
 
 ## 意图与背景
 

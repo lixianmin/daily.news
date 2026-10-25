@@ -34,7 +34,7 @@ if [ -z "$BUN_BIN" ]; then
 fi
 
 if [ ! -f "$DIR/.env" ]; then
-  echo "⚠️  缺少 .env，控制台将无法登录。先执行：cp .env.example .env 并填值"
+  echo "⚠️  缺少 .env，调试面板（/shell）不会挂载。先执行：cp .env.example .env 并填值"
 fi
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"
@@ -61,7 +61,7 @@ cat > "$PLIST_DST" <<PLIST
 	<array>
 		<string>$BUN_BIN</string>
 		<string>run</string>
-		<string>$DIR/src/server.ts</string>
+		<string>$DIR/src/main.ts</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -92,7 +92,7 @@ if launchctl list | grep -q "$LABEL"; then
     echo "   本机:   http://127.0.0.1:5003"
     LAN=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
     [ -n "$LAN" ] && echo "   局域网: http://$LAN:5003"
-    echo "   控制台: http://127.0.0.1:5003/console"
+    echo "   调试面板: http://127.0.0.1:5003/shell"
   else
     echo "   ⚠️ 端口 5003 未监听，看日志: $LOG_DIR/server.err.log"
   fi

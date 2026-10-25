@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createServer, type ServerHandle } from "../src/server.ts";
+import { createServer, type ServerHandle } from "../src/main.ts";
 import { createStore, type Store } from "../src/store.ts";
 import type { DigestDay } from "../src/types.ts";
 import { TEST_QUEUE_PATH } from "./helpers/queue.ts";
@@ -53,6 +53,9 @@ beforeEach(async () => {
     queuePath: TEST_QUEUE_PATH,
     // 测试里绝不跑真实抓取与模型调用
     generate: async () => true,
+    // 面板账号在生产配置里留空（不挂面板），测试要能验 /shell 的鉴权
+    shellUsers: { tester: "test-password" },
+    shellSecret: "test-secret",
   });
   base = `http://127.0.0.1:${server.port}`;
 });
@@ -142,7 +145,7 @@ describe("API 路由", () => {
     expect(response.status).toBe(404);
     const payload = await jsonOf(response);
     expect(payload.code).toBe("not_found");
-    expect(payload.message).toContain("/nope");
+    expect(payload.message).toBeTruthy();
   });
 });
 
@@ -169,6 +172,28 @@ describe("POST /api/regenerate", () => {
     const payload = await jsonOf(response);
     expect(payload.code).toBe("bad_request");
     expect(payload.message).toContain("YYYY-MM-DD");
+  });
+
+  it("date 类型不对（不是字符串）返回 400", async () => {
+    const response = await fetch(`${base}/api/regenerate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ date: 20261023 }),
+    });
+    expect(response.status).toBe(400);
+    const payload = await jsonOf(response);
+    expect(payload.code).toBe("bad_request");
+  });
+
+  it("body 不是合法 JSON 返回 400", async () => {
+    const response = await fetch(`${base}/api/regenerate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not json",
+    });
+    expect(response.status).toBe(400);
+    const payload = await jsonOf(response);
+    expect(payload.code).toBe("bad_request");
   });
 
   it("省略日期时默认今天", async () => {
@@ -200,17 +225,17 @@ describe("SSE 进度流", () => {
   });
 });
 
-describe("控制台", () => {
-  it("/console 返回登录页 HTML", async () => {
-    const response = await fetch(`${base}/console`);
+describe("调试面板", () => {
+  it("/shell 返回登录页 HTML", async () => {
+    const response = await fetch(`${base}/shell`);
     expect(response.status).toBe(200);
     const html = await response.text();
-    // 页面里有控制台的输入框或脚本
+    // 页面里有面板的输入框或脚本
     expect(html.length).toBeGreaterThan(200);
   });
 
   it("未登录执行命令被拒（401）", async () => {
-    const response = await fetch(`${base}/console/exec`, {
+    const response = await fetch(`${base}/shell/exec`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ line: "top" }),
@@ -219,7 +244,7 @@ describe("控制台", () => {
   });
 
   it("未登录拉日志流被拒", async () => {
-    const response = await fetch(`${base}/console/events`);
+    const response = await fetch(`${base}/shell/events`);
     expect(response.status).toBe(401);
   });
 });

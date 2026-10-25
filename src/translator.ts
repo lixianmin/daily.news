@@ -1,4 +1,4 @@
-import { log } from "./log.ts";
+import { logger } from "./logo.ts";
 import type { Translator } from "./translate.ts";
 
 /** 单次翻译请求超时。 */
@@ -108,7 +108,7 @@ export function createTranslator(): Translator {
         // 连续两次失败才彻底放弃 Google：偶发单条失败不该永久降级
         if (googleFailures >= 2) {
           googleAlive = false;
-          log().warn("google translate disabled, using mymemory", {
+          logger.warn("google translate disabled, using mymemory", {
             failures: googleFailures,
             error: String(error),
           });

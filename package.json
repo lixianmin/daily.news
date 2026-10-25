@@ -1,22 +1,23 @@
 {
   "name": "daily.news",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "description": "每日热点摘要：抓取多源新闻，结构化落盘，Hono 服务随时翻阅",
   "scripts": {
-    "start": "bun run src/server.ts",
+    "start": "bun run src/main.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "link:needle": "bun link @needle/logo @needle/shell"
+    "link:needle": "bun link @needle/honox @needle/logo @needle/shell"
   },
   "dependencies": {
     "@hono/bun": "^1.0.1",
+    "@needle/honox": "link:@needle/honox",
     "@needle/logo": "link:@needle/logo",
     "@needle/shell": "link:@needle/shell",
+    "@sinclair/typebox": "^0.34.52",
     "bunqueue": "^2.9.18",
-    "hono": "^4.13.13",
-    "ulid": "^3.0.2"
+    "hono": "^4.13.13"
   },
   "devDependencies": {
     "@types/bun": "latest",

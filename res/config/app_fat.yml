@@ -1,0 +1,2 @@
+# FAT 环境配置 - 只包含与 common.yml 不同的配置
+# 这个项目没有测试环境，文件留着占位：loadConfig 要求 app_<ENV>.yml 必须存在

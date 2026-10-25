@@ -15,7 +15,7 @@ import { TEST_QUEUE_PATH, waitFor } from "./helpers/queue.ts";
  * 客户端只在 `live === true` 的 `done` 上刷新。
  */
 
-/** 起一个带 SSE 路由的测试服务，路由逻辑与 src/server.ts 保持一致。 */
+/** 起一个带 SSE 路由的测试服务，路由逻辑与 src/api/stream.ts 保持一致。 */
 async function startSseServer(scheduler: ReturnType<typeof createScheduler>) {
   const app = new Hono();
 

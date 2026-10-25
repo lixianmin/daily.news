@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { DATA_DIR, fetchScript, runsDir, todayInShanghai, weekdayOf } from "./config.ts";
 import { enrichSection, buildMetaIndexes, limitSectionItems } from "./enrich.ts";
-import { log } from "./log.ts";
+import { logger } from "./logo.ts";
 import { generateSection } from "./model.ts";
 import type { Store } from "./store.ts";
 import { translateSection, type Translator } from "./translate.ts";
@@ -110,7 +110,6 @@ function emit(
 
 /** 跑抓取脚本。返回是否成功，不抛。 */
 async function runFetch(date: string, sources: SourceKey[]): Promise<{ ok: boolean; error?: string }> {
-  const logger = log();
   const bin = fetchScript();
   // fetch.sh 的 --sources 用抓取脚本自己的名字（gh/hn/zhihu/twitter），与内部 key 不同
   const scriptNames = sources.map(scriptName).join(",");
@@ -265,7 +264,6 @@ function countSourceLines(content: string): number {
  * （页面按 `sources[key].ok === false` 显示 ⚠️）。
  */
 export async function generateDay(options: GenerateDayOptions): Promise<GenerateDayResult> {
-  const logger = log();
   const { date, store, translator, onProgress } = options;
   const sources = options.sources ?? [...SOURCE_KEYS];
 

@@ -7,7 +7,7 @@ import {
   type GenerateFn,
   type GenerateJobData,
 } from "./jobs.ts";
-import { log } from "./log.ts";
+import { logger } from "./logo.ts";
 import type { DigestDay, ProgressEvent, SourceKey } from "./types.ts";
 
 /** 队列名。 */
@@ -117,7 +117,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
     const jobId = `retry:${date}`;
     const state = await queue.getJobState(jobId);
     if (state !== "unknown") {
-      log().info("retry not scheduled: chain already exists", { date, state });
+      logger.info("retry not scheduled: chain already exists", { date, state });
       return;
     }
     await queue.add(
@@ -130,7 +130,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
         backoff: { type: "fixed", delay: retryDelayMs },
       },
     );
-    log().warn("generate incomplete, retry scheduled", {
+    logger.warn("generate incomplete, retry scheduled", {
       date,
       sources,
       delayMinutes: Math.max(1, Math.round(retryDelayMs / 60000)),
@@ -184,15 +184,15 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
       } catch (error) {
         // 队列起不来（库文件损坏、权限不足）→ 服务照常起，页面照常读，
         // 只是没有定时生成。静默降级会让「今天怎么没生成」变成查不到原因的事故。
-        log().error("scheduler unavailable: queue init failed", { error: String(error) });
+        logger.error("scheduler unavailable: queue init failed", { error: String(error) });
         return;
       }
 
       createdWorker.on("error", (error) => {
-        log().error("queue worker error", { error: String(error) });
+        logger.error("queue worker error", { error: String(error) });
       });
       createdWorker.on("failed", (job, error) => {
-        log().error("job failed", { id: job.id, name: job.name, error: String(error) });
+        logger.error("job failed", { id: job.id, name: job.name, error: String(error) });
       });
 
       queue = created;
@@ -210,10 +210,10 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
           { name: GENERATE_JOB, data: { kind: "today" } satisfies GenerateJobData },
         );
       } catch (error) {
-        log().error("daily cron registration failed", { error: String(error) });
+        logger.error("daily cron registration failed", { error: String(error) });
       }
 
-      log().info("scheduler started", { dataPath, queue: QUEUE_NAME, hour: generateHour });
+      logger.info("scheduler started", { dataPath, queue: QUEUE_NAME, hour: generateHour });
     },
 
     async stop() {
@@ -228,14 +228,14 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
       const day = await options.readDay(date);
       // 有成品且不缺来源才算完整：部分失败的成品也要补
       if (day !== null && missingSources(day).length === 0) {
-        log().info("startup check: today already generated", { date });
+        logger.info("startup check: today already generated", { date });
         return;
       }
       // 还没到今天的生成时刻就别抢跑——凌晨启动时生成「今天」的日报，
       // 那时热榜才刚开始，意义不大。等每日定时器到点再生成。
       const now = options.now?.() ?? new Date();
       if (hourInShanghai(now) < generateHour) {
-        log().info("startup check: before daily hour, waiting for timer", {
+        logger.info("startup check: before daily hour, waiting for timer", {
           date,
           hour: hourInShanghai(now),
         });
@@ -249,7 +249,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
         { kind: "catchup", date } satisfies GenerateJobData,
         { jobId: `catchup:${date}` },
       );
-      log().info("startup check: today missing, queued", { date });
+      logger.info("startup check: today missing, queued", { date });
     },
 
     async regenerate(date) {
@@ -265,7 +265,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
         { kind: "manual", date } satisfies GenerateJobData,
         { jobId: `manual:${date}` },
       );
-      log().info("regenerate queued", { date });
+      logger.info("regenerate queued", { date });
       return { started: true };
     },
 

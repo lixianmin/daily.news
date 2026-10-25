@@ -9,7 +9,7 @@ import {
   piBin,
   promptFile,
 } from "./config.ts";
-import { log } from "./log.ts";
+import { logger } from "./logo.ts";
 import { parseSection } from "./llm.ts";
 import type { DigestSection, SourceKey } from "./types.ts";
 
@@ -177,7 +177,6 @@ export interface GenerateOptions {
  * 单块彻底失败不抛错——返回 ok:false，由上层的章节状态标记 ⚠️。
  */
 export async function generateSection(options: GenerateOptions): Promise<SectionOutcome> {
-  const logger = log();
   const instruction = SCHEMA_HINT[options.key];
   let attempts = 0;
   let lastError = "";

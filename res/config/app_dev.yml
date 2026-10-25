@@ -1,0 +1,6 @@
+# DEV 环境配置 - 只包含与 common.yml 不同的配置
+# 本机常驻服务跑的就是这一份（ENV 默认 dev）
+
+logger:
+  # debug 只在本地开：日志量翻几倍，排查时才需要
+  filter_level: debug

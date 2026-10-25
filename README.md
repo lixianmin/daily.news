@@ -12,7 +12,7 @@
 本机        http://127.0.0.1:5003
 局域网      http://<你的局域网IP>:5003      （手机同一 WiFi 可看）
 Tailscale   http://<你的Tailscale IP>:5003 （跨网络可看，见 `tailscale ip -4`）
-控制台      http://127.0.0.1:5003/console   （需密码，见 .env）
+调试面板    http://127.0.0.1:5003/shell     （需密码，见 .env）
 ```
 
 - 首页列出所有已生成的日期，点进去看某天详情；顶部搜索框可跨天全文搜索。
@@ -28,25 +28,50 @@ Tailscale   http://<你的Tailscale IP>:5003 （跨网络可看，见 `tailscale
 ## 安装
 
 ```bash
-cp .env.example .env      # 填 CONSOLE_USER / CONSOLE_PASSWORD / CONSOLE_SECRET
+cp .env.example .env      # 填 APP_SHELL__USER / APP_SHELL__PASSWORD / APP_SHELL__SECRET
 bun install
 ./scripts/install.sh      # 装 launchd 常驻服务
 ```
 
 卸载：`./scripts/install.sh --remove`（数据保留）。重启：`--restart`。
 
+## 配置
+
+配置分三层，加载顺序即覆盖顺序：
+
+1. `res/config/common.yml`（所有环境共享，可缺）
+2. `res/config/app_<env>.yml`（只写差异项，**必须存在**）
+3. `APP_*` 环境变量（`__` 分隔层级，如 `APP_SERVER__WEB_PORT=9000`）
+
+`ENV` 决定第 2 步读哪份文件，只认 **dev / fat / pro**（默认 dev，写错直接报错）。
+这是整个项目唯一读 `process.env` 的地方——业务代码一律走 `src/viper.ts` 的取值器，
+再由 `src/config.ts` 翻成有名字的常量。
+
+**密钥不进 yml**：面板口令、面板 token 密钥都放 `.env`（Bun 启动时自动加载），
+键名见 `.env.example`。缺了就是「不挂面板」，不是「用仓库里的默认口令挂面板」。
+
+常用覆盖：
+
+| 想改什么 | 环境变量 |
+|---|---|
+| 端口 | `APP_SERVER__WEB_PORT=5003` |
+| 数据目录 | `APP_DATA__DIR=~/Documents/daily-news` |
+| 日志级别 | `APP_LOGGER__FILTER_LEVEL=debug` |
+| 面板账号 | `APP_SHELL__USER` / `APP_SHELL__PASSWORD` |
+
 ### 依赖 needle 的本地版本
 
-`@needle/logo` 与 `@needle/shell` 用 **bun link** 指向本地仓库 `~/me/code/needle`
-（而不是从 GitHub 拉快照），这样改 needle 后本项目立刻生效：
+`@needle/honox` / `@needle/logo` / `@needle/shell` 用 **bun link** 指向本地仓库
+`~/me/code/needle`（而不是从 GitHub 拉快照），这样改 needle 后本项目立刻生效：
 
 ```bash
 # needle 侧：把三个包注册为可链接
+cd ~/me/code/needle/packages/honox && bun link
 cd ~/me/code/needle/packages/logo && bun link
 cd ~/me/code/needle/packages/shell && bun link
 
-# 本项目侧：建立链接（package.json 里已声明 link:@needle/logo）
-bun link @needle/logo @needle/shell
+# 本项目侧：建立链接（package.json 里已声明 link:@needle/honox）
+bun link @needle/honox @needle/logo @needle/shell
 # 或者直接跑脚本
 bun run link:needle
 ```
@@ -64,7 +89,7 @@ bun run link:needle
 └── logs/                     info.log / warn.log / error.log（保留 30 天）
 ```
 
-数据目录可用 `DAILY_NEWS_DATA_DIR` 覆盖。
+数据目录可用 `APP_DATA__DIR` 覆盖（或在 `res/config/common.yml` 里改 `data.dir`）。
 
 ## 模型通道
 
@@ -102,6 +127,9 @@ days/<date>.json + index.json → Hono 渲染
   由 `src/meta.ts` 按标题/handle 关联回去。
 - **Hono 原生提供 HTTP server**。`export default { port, hostname, fetch }`，
   Bun 运行时认这个默认导出并自己监听。
+- **服务层是 `@needle/honox` 的**。`createHonox` 装 rid → 兜底日志 → JWT → 门禁，
+  路由挂在它返回的实例上；一个领域一个文件在 `src/api/`，参数模型在 `src/beans/`。
+  请求日志不自动写：业务用 `traceOf(ctx)` 决定打什么，库只补 401 / 404 / 500 / 慢请求。
 - **本机判定用 `getConnInfo`**。写操作（重新生成）只放行本机，
   靠真实 socket 地址判断，不能信可伪造的 Host/Origin 头。
 
@@ -110,9 +138,9 @@ days/<date>.json + index.json → Hono 渲染
 ## 开发
 
 ```bash
-bun test                  # 165 个测试
+bun test                  # 188 个测试
 bunx tsc --noEmit         # 类型检查
-bun run src/server.ts     # 前台起服务（改代码调试用）
+bun run src/main.ts       # 前台起服务（改代码调试用）
 ```
 
 验收命令即 `bun test && bunx tsc --noEmit`（`AGENTS.md` §13.3 的 `VERIFY`）。

@@ -1,0 +1,25 @@
+# 通用配置 - 所有环境共享
+# 加载顺序：common.yml → app_<ENV>.yml → APP_* 环境变量（双下划线分隔层级）
+# 密钥不写在这里：口令、密钥一律用 APP_* 注入（见 .env.example）
+
+server:
+  # 本机空闲端口，与 screenhub 8787、video-downloader 8891 不冲突
+  web_port: 5003
+  # 绑 0.0.0.0 是为了手机在同一 WiFi 下能看
+  host: 0.0.0.0
+
+data:
+  # 长期保留的文档类产物，放纯本地的 Documents 而不是 Downloads
+  dir: ~/Documents/daily-news
+
+model:
+  # 主通道：key 从 ~/.zshrc.sh 的 DEEPSEEK_API_KEY 抽取（launchd 不读 shell rc）
+  primary:
+    provider: deepseek
+    model: deepseek-flash
+  # 兜底通道：凭证在 ~/.pi/agent/auth.json，与主通道不同服务商
+  fallback:
+    provider: zai-coding-cn
+    model: glm-5.3-flash
+  # pi 可执行文件：自托管版优先，随 pi 升级
+  pi_bin: ~/.pi/agent/bin/pi

@@ -1,16 +1,36 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { viper } from "./viper.ts";
+
+/**
+ * 本项目的配置视图。
+ *
+ * 真值来源是 `res/config/*.yml` + `APP_*` 环境变量，加载与取值全在 `src/viper.ts`；
+ * 这个文件只把点分路径翻译成常量与路径函数，业务代码 import 这里，不碰 viper 的字符串。
+ * 进程启动时求值一次，配错就在启动期炸掉（缺值不静默变成 "" / 0）。
+ */
+
+/** 展开 `~` 与 `~/x`：配置里写 `~/Documents/daily-news` 比写死绝对路径可移植。 */
+function expandHome(path: string): string {
+  if (path === "~") {
+    return homedir();
+  }
+  if (path.startsWith("~/")) {
+    return join(homedir(), path.slice(2));
+  }
+  return path;
+}
 
 /**
  * 数据根目录。
  *
  * 默认放 ~/Documents 下的独立目录而不是 ~/Downloads：这些是长期保留的
- * 文档类产物，不该混进下载目录被清理工具扫走。环境变量可覆盖（测试用）。
+ * 文档类产物，不该混进下载目录被清理工具扫走。
  */
-export const DATA_DIR = process.env["DAILY_NEWS_DATA_DIR"] ?? join(homedir(), "Documents", "daily-news");
+export const DATA_DIR = expandHome(viper.getString("data.dir"));
 
 /** 服务端口。5003 由用户指定，本机空闲，与 screenhub 8787、video-downloader 8891 都不冲突。 */
-export const PORT = Number(process.env["DAILY_NEWS_PORT"] ?? 5003);
+export const PORT = viper.getInt("server.web_port");
 
 /**
  * 监听地址。
@@ -18,12 +38,12 @@ export const PORT = Number(process.env["DAILY_NEWS_PORT"] ?? 5003);
  * 绑 0.0.0.0 是为了手机在同一 WiFi 下能看。只读页面公开，
  * 写操作（/api/regenerate）与控制台另有防护。
  */
-export const HOSTNAME = process.env["DAILY_NEWS_HOST"] ?? "0.0.0.0";
+export const HOSTNAME = viper.getString("server.host", "0.0.0.0");
 
-/** 抓取产物保留天数。原始数据只为排障，7 天足够回溯一周。 */
+/** 抓取产物保留天数。原始数据只为排障，7 天足够回溯一周（由 fetch.sh 执行）。 */
 export const RUNS_RETENTION_DAYS = 7;
 
-/** 日志保留天数。 */
+/** 日志保留天数（由 fetch.sh 执行）。 */
 export const LOGS_RETENTION_DAYS = 30;
 
 /**
@@ -37,20 +57,16 @@ export function queueDbPath(dataDir: string = DATA_DIR): string {
 }
 
 /** 主通道：deepseek，key 从 ~/.zshrc.sh 抽取（launchd 不读 shell rc）。 */
-export const PRIMARY_PROVIDER = process.env["PRIMARY_PROVIDER"] ?? "deepseek";
-export const PRIMARY_MODEL = process.env["PRIMARY_MODEL"] ?? "deepseek-flash";
+export const PRIMARY_PROVIDER = viper.getString("model.primary.provider");
+export const PRIMARY_MODEL = viper.getString("model.primary.model");
 
 /** 兜底通道：zai-coding-cn，凭证在 ~/.pi/agent/auth.json，与主通道不同服务商。 */
-export const FALLBACK_PROVIDER = process.env["FALLBACK_PROVIDER"] ?? "zai-coding-cn";
-export const FALLBACK_MODEL = process.env["FALLBACK_MODEL"] ?? "glm-5.3-flash";
+export const FALLBACK_PROVIDER = viper.getString("model.fallback.provider");
+export const FALLBACK_MODEL = viper.getString("model.fallback.model");
 
 /** pi 可执行文件：优先自托管版（随 pi 升级），回落 brew 版。 */
 export function piBin(): string {
-  const explicit = process.env["PI_BIN"];
-  if (explicit !== undefined && explicit !== "") {
-    return explicit;
-  }
-  return join(homedir(), ".pi", "agent", "bin", "pi");
+  return expandHome(viper.getString("model.pi_bin", "~/.pi/agent/bin/pi"));
 }
 
 /** 抓取脚本路径。 */
@@ -70,24 +86,6 @@ export function runsDir(date: string): string {
 export function logsDir(): string {
   return join(DATA_DIR, "logs");
 }
-
-/**
- * 控制台凭据。三者都从环境变量读，不放代码里。
- *
- * `CONSOLE_SECRET` 缺省时 needle 会随机生成并在启动时 warn——那种情况下
- * 服务重启后所有登录态失效，需要重新 `auth`。
- */
-export const CONSOLE_USER = process.env["CONSOLE_USER"] ?? "";
-export const CONSOLE_PASSWORD = process.env["CONSOLE_PASSWORD"] ?? "";
-export const CONSOLE_SECRET = process.env["CONSOLE_SECRET"] ?? "";
-
-/**
- * JWT 验签密钥。
- *
- * 空串 = 只解不验（core 的 JWT 中间件解出 payload 但不验签，uid 不可信）。
- * 现在还没有登录、没有签发方，所以默认为空。
- */
-export const JWT_SECRET = process.env["DAILY_NEWS_JWT_SECRET"] ?? "";
 
 /** 东八区偏移（毫秒）。存储与统计固定用东八区。 */
 const TZ_OFFSET_MS = 8 * 60 * 60 * 1000;
