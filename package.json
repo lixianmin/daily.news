@@ -1,6 +1,6 @@
 {
   "name": "daily.news",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "type": "module",
   "description": "每日热点摘要：抓取多源新闻，结构化落盘，Hono 服务随时翻阅",

@@ -82,7 +82,7 @@
 - **服务 label**：`com.xmli.daily-news`
 - **前端**：原生 HTML + 一个 JS 文件，无构建步骤。理由：页面是"列表 + 详情 + 搜索"三块，不值得引入 Vite/React 构建链；也避免服务启动前需要先 build
 - **渲染**：服务端把 JSON 渲染成 HTML（SSR），单页无框架。搜索走服务端 API
-- **写操作安全**：`/api/regenerate` 会消耗 LLM 额度，只允许来自本机的请求触发（局域网手机只读）
+- **写操作**：`/api/regenerate` 会消耗 LLM 额度。2026-10-25 用户拍板：不限来源，局域网设备（手机）也可触发；只读接口不设防
 
 ## 5. 架构
 
@@ -100,7 +100,7 @@
 │  GET  /api/days         → 日期索引 JSON               │
 │  GET  /api/day/:date    → 某天原始 JSON               │
 │  GET  /api/search?q=    → 跨天全文搜索                │
-│  POST /api/regenerate   → 触发生成（仅本机）          │
+│  POST /api/regenerate   → 触发生成（不限来源，2026-10-25 起）          │
 │  GET  /api/stream       → SSE 实时进度               │
 │  GET  /health           → 健康检查                    │
 │                                                      │
@@ -226,7 +226,7 @@ fetch.sh                              → runs/<date>/*.md
 2. **不牺牲内容质量**：JSON 字段必须能承载现在 Markdown 里的全部信息（标题/链接/英文/繁中/@handle/分类）
 3. **dokobot 依赖已登录 Chrome**：抓 X 的路径不变
 4. **launchd 环境无 shell rc**：LLM key 从 `~/.zshrc.sh` 精确抽取（已实测该抽取逻辑在 `env -i` 干净环境下有效）
-5. **局域网暴露**：`/api/regenerate` 限本机；只读接口不设防
+5. **局域网暴露**：`/api/regenerate` 已对局域网开放（2026-10-25 用户拍板）；只读接口不设防
 6. **端口**：5003
 7. **错误响应形状固定**：接口失败一律非 2xx + `{ "code": ..., "message": ... }`，由 `@needle/shell` 的 `ResponseX` 出口（具名方法锁死状态码与 `code`），不自己拼 `{error}` 那种壳。客户端只需一条规则：`if (!res.ok) { const { code, message } = await res.json(); }`。`/health` 是探活载荷，不走这个信封
 
@@ -262,5 +262,5 @@ fetch.sh                              → runs/<date>/*.md
 | LLM 不稳定输出合法 JSON | 解析层多重容错 + 单块失败不拖垮整篇（该章节标 ⚠️）+ 可重试 |
 | JSON 化导致内容质量下降 | 保留现有分块粒度与英文写作策略；先跑一次真实生成对比旧 Markdown 产出 |
 | 服务进程里跑长任务被重启打断 | launchd `KeepAlive` 会重启；生成过程幂等（写临时文件再 rename），中断不产生半截 JSON |
-| 局域网暴露写接口 | `/api/regenerate` 校验来源为本机 |
+| 局域网暴露写接口 | 已接受：`/api/regenerate` 对局域网开放（2026-10-25 用户拍板） |
 | `~/Documents` 被清理工具误删 | 数据目录独立命名 + README 说明 |

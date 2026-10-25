@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer, type ServerHandle } from "../src/main.ts";
@@ -223,6 +223,14 @@ describe("POST /api/regenerate", () => {
     expect(response.status).toBe(200);
     const payload = await jsonOf(response);
     expect(payload.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("不再限制本机：源码里没有来源判定（2026-10-25 起局域网可触发）", async () => {
+    // 行为测不了非本机来源（测试请求永远走回环），沿用仓库的源码断言先例
+    const src = await readFile(join(import.meta.dir, "..", "src", "api", "regen.ts"), "utf8");
+    expect(src).not.toContain("isLocalRequest");
+    expect(src).not.toContain("isLoopback");
+    expect(src).not.toContain("只允许本机触发");
   });
 });
 
