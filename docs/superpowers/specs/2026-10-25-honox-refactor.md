@@ -110,8 +110,9 @@ res/
 `traceOf(ctx)` 留一行，拒绝的出口记 warn；401/404/500/慢请求由库兜底。比现在的「每个请求
 开始+结束两条」安静得多，也不丢排障信息——同一条链路上的行靠 `rid` 串起来。
 
-全局 `logo` 默认挂了一个 stdout sink，`initLog()` 里显式摘掉：launchd 的 `StandardOutPath`
-已经在收 stdout，留着等于同一行落两遍盘，`bun test` 也会被日志刷屏。
+全局 `logo` 默认挂了一个 stdout sink，`src/logo.ts` 在**模块顶层**摘掉（不是 `initLog()` 里）：
+launchd 的 `StandardOutPath` 已经在收 stdout，留着等于同一行落两遍盘；放顶层还能让
+「只 import 调度器的测试」也立刻安静，不用等 `initLog()` 被调。
 
 ### 参数校验
 

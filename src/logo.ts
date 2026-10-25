@@ -17,6 +17,11 @@ import { viper } from "./viper.ts";
  */
 export const logger = logo;
 
+// 摘掉默认的 stdout sink：日志只进文件与面板。launchd 的 StandardOutPath 已经在收
+// stdout，留着等于同一行落两遍盘。放在模块顶层而不是 initLog 里：任何 import 到
+// 这个模块的路径（含只跑调度器的测试）都该立刻安静下来，而不是等 initLog 被调。
+logger.removeSink(stdoutSink);
+
 /**
  * 读级别配置。
  *
@@ -62,9 +67,6 @@ export function initLog(): { logFiles: LogFiles } {
 
   const level = readLevel();
   logger.setLevel(level);
-  // 摘掉默认的 stdout sink：日志只进文件与面板。launchd 的 StandardOutPath 已经
-  // 在收 stdout，留着等于同一行落两遍盘；跑测试时也会刷屏。
-  logger.removeSink(stdoutSink);
   // minLevel 跟着 filter_level 走：级别开到 debug 才需要 debug.log，
   // 否则只是凭空多一个永远为空的文件。
   logger.addSink(createFileSink({ dir: logDir(), minLevel: level }));
