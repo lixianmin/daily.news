@@ -47,6 +47,8 @@ interface LayoutOptions {
   sidebar: string;
   /** 浮动目录面板的内容。 */
   toc: string;
+  /** 详情页为 true：窄屏下侧栏隐藏，左上角显式给「← 回到主页」。首页自己是主页，不显。 */
+  homeBack?: boolean;
 }
 
 function layout(options: LayoutOptions): string {
@@ -58,13 +60,14 @@ function layout(options: LayoutOptions): string {
 <title>${escapeHtml(options.title)}</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>${TOKENS}${STYLES}</style>
 ${options.head ?? ""}
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar" id="sidebar">${options.sidebar}</aside>
-  <div class="main"><a class="mobile-brand" href="/" title="回到主页">Daily Digest</a><div class="wrap" id="top">${options.body}</div></div>
+  <div class="main">${options.homeBack ? '<a class="mobile-brand" href="/" title="回到主页">← 回到主页</a>' : ""}<div class="wrap" id="top">${options.body}</div></div>
 </div>
 <div class="toc-dock" id="tocDock">
   <div class="toc-float" id="tocFloat" hidden>
@@ -483,6 +486,7 @@ ${sections}
       footer: `<div class="side-group"><a class="side-link" href="/">← 所有日期</a></div>`,
     }),
     toc: renderToc({ days: history, current: day.date, sections: sideSections }),
+    homeBack: true,
     body,
   });
 }

@@ -135,17 +135,21 @@ describe("renderIndexPage：侧边栏", () => {
     expect(html).toContain('<a class="brand" href="/"');
   });
 
-  it("窄屏下侧栏被隐藏，头部有指向主页的品牌链接", () => {
-    const html = renderIndexPage(index);
-    expect(html).toContain('<a class="mobile-brand" href="/"');
-    const dayHtml = renderDayPage(day, {}, index.days, "2026-10-23");
-    expect(dayHtml).toContain('<a class="mobile-brand" href="/"');
+  it("详情页窄屏左上角是明确的「← 回到主页」链接", () => {
+    const html = renderDayPage(day, {}, index.days, "2026-10-23");
+    expect(html).toContain('<a class="mobile-brand" href="/" title="回到主页">← 回到主页</a>');
   });
 
-  it("head 里声明 favicon（svg 优先，png 兑底）", () => {
+  it("首页不显示回主页链接（自己就是主页）", () => {
+    const html = renderIndexPage(index);
+    expect(html).not.toContain('<a class="mobile-brand"');
+  });
+
+  it("head 里声明 favicon（svg 优先，png 兑底）与 apple-touch-icon", () => {
     const html = renderIndexPage(index);
     expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg">');
-    expect(html).toContain('<link rel="icon" href="/favicon.png"');
+    expect(html).toContain('<link rel="icon" href="/favicon.png">');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/apple-touch-icon.png">');
   });
 });
 

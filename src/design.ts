@@ -96,7 +96,8 @@ a{color:inherit;text-decoration:none}
 
 /* ── 侧边栏 ──────────────────────────────────── */
 .brand{display:block;padding:0 18px 12px;text-decoration:none;color:inherit}
-/* 窄屏下侧栏整体隐藏，品牌链接在 .main 顶部补一份（样式在底部 860px 媒体查询里） */
+/* 窄屏下侧栏整体隐藏，回主页入口在 .main 顶部补一份（样式在底部 860px 媒体查询里）。
+   文案是显式的「← 回到主页」——用户实测没人看得出品牌文字能点。 */
 .mobile-brand{display:none}
 .brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.01em;transition:color .15s}
 .brand:hover h1{color:var(--accent)}
@@ -391,7 +392,7 @@ a.card-title:hover{color:var(--accent)}
 @media (max-width:860px){
   .shell{display:block}
   .sidebar{display:none}
-  .mobile-brand{display:block;padding:12px 4px 0;font-size:15px;font-weight:650;letter-spacing:.01em;color:var(--fg);text-decoration:none}
+  .mobile-brand{display:block;padding:12px 4px 0;font-size:13px;font-weight:550;color:var(--fg-2);text-decoration:none}
   .main{padding:0 14px 72px}
   .page-head h2{font-size:20px}
   .day-row{flex-wrap:wrap;gap:8px}

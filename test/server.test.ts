@@ -104,6 +104,12 @@ describe("页面路由", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("image/png");
   });
+
+  it("apple-touch-icon.png 可访问（iOS 桌面图标）", async () => {
+    const response = await fetch(`${base}/apple-touch-icon.png`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/png");
+  });
 });
 
 describe("API 路由", () => {

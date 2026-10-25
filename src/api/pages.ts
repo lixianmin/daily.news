@@ -40,10 +40,12 @@ export function createPagesApi(store: Store) {
     }
   });
 
-  // favicon：svg 优先（见 renderShell 里的 link 声明），png 兜底不支持 svg 的浏览器
+  // favicon：svg 优先（见 layout 里的 link 声明），png 兜底不支持 svg 的浏览器；
+  // apple-touch-icon 给 iOS 添加到主屏幕用
   for (const [file, type] of [
     ["favicon.svg", "image/svg+xml"],
     ["favicon.png", "image/png"],
+    ["apple-touch-icon.png", "image/png"],
   ] as const) {
     api.get(`/${file}`, async (ctx) => {
       try {
