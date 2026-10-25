@@ -124,6 +124,16 @@ describe("renderIndexPage：侧边栏", () => {
     expect(html).toContain('href="#sec-twitter"');
     expect(html).toContain("data-spy=");
   });
+
+  it("左上角品牌区是指向主页的链接", () => {
+    const html = renderIndexPage(index);
+    expect(html).toContain('<a class="brand" href="/"');
+  });
+
+  it("详情页左上角品牌区同样指向主页", () => {
+    const html = renderDayPage(day, {}, index.days, "2026-10-23");
+    expect(html).toContain('<a class="brand" href="/"');
+  });
 });
 
 describe("renderIndexPage：日期列表", () => {

@@ -95,8 +95,9 @@ a{color:inherit;text-decoration:none}
 .wrap{max-width:820px;margin:0 auto}
 
 /* ── 侧边栏 ──────────────────────────────────── */
-.brand{padding:0 18px 12px}
-.brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.01em}
+.brand{display:block;padding:0 18px 12px;text-decoration:none;color:inherit}
+.brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.01em;transition:color .15s}
+.brand:hover h1{color:var(--accent)}
 .brand .sub{color:var(--muted);font-size:12px;margin-top:2px}
 .side-search{padding:0 14px 12px}
 .side-search input{

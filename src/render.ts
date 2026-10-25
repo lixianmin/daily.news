@@ -173,10 +173,10 @@ function renderSidebar(options: SidebarOptions): string {
   </div>`;
 
   return `<div class="side-top">
-  <div class="brand">
+  <a class="brand" href="/" title="回到主页">
     <h1>Daily Digest</h1>
     <div class="sub">每日热点摘要</div>
-  </div>
+  </a>
   ${options.search === false ? "" : `<div class="side-search"><input type="search" data-search placeholder="搜索所有日期…" autocomplete="off"></div>`}
 </div>
 <div class="side-bottom">
