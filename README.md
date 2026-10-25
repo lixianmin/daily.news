@@ -9,10 +9,10 @@
 服务常驻在本机，固定网址打开就能看：
 
 ```
-本机        http://127.0.0.1:8790
-局域网      http://<你的局域网IP>:8790      （手机同一 WiFi 可看）
-Tailscale   http://<你的Tailscale IP>:8790 （跨网络可看，见 `tailscale ip -4`）
-控制台      http://127.0.0.1:8790/console   （需密码，见 .env）
+本机        http://127.0.0.1:5003
+局域网      http://<你的局域网IP>:5003      （手机同一 WiFi 可看）
+Tailscale   http://<你的Tailscale IP>:5003 （跨网络可看，见 `tailscale ip -4`）
+控制台      http://127.0.0.1:5003/console   （需密码，见 .env）
 ```
 
 - 首页列出所有已生成的日期，点进去看某天详情；顶部搜索框可跨天全文搜索。

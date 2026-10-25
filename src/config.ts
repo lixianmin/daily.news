@@ -9,8 +9,8 @@ import { join } from "node:path";
  */
 export const DATA_DIR = process.env["DAILY_NEWS_DATA_DIR"] ?? join(homedir(), "Documents", "daily-news");
 
-/** 服务端口。8790 在 8787（screenhub）与 8891（video-downloader）之外，避开常用段。 */
-export const PORT = Number(process.env["DAILY_NEWS_PORT"] ?? 8790);
+/** 服务端口。5003 由用户指定，本机空闲，与 screenhub 8787、video-downloader 8891 都不冲突。 */
+export const PORT = Number(process.env["DAILY_NEWS_PORT"] ?? 5003);
 
 /**
  * 监听地址。

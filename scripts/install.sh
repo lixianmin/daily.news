@@ -45,7 +45,7 @@ cat > "$PLIST_DST" <<PLIST
 <plist version="1.0">
 <dict>
 	<key>Description</key>
-	<string>每日热点摘要 Web 服务，端口 8790</string>
+	<string>每日热点摘要 Web 服务，端口 5003</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>PATH</key>
@@ -86,15 +86,15 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST_DST"
 echo "✅ 已安装 $LABEL"
 sleep 2
 if launchctl list | grep -q "$LABEL"; then
-  PORT=$(lsof -nP -iTCP:8790 -sTCP:LISTEN 2>/dev/null | awk 'NR>1{print $2}' | head -1)
+  PORT=$(lsof -nP -iTCP:5003 -sTCP:LISTEN 2>/dev/null | awk 'NR>1{print $2}' | head -1)
   if [ -n "$PORT" ]; then
-    echo "   ✅ 端口 8790 已监听 (pid $PORT)"
-    echo "   本机:   http://127.0.0.1:8790"
+    echo "   ✅ 端口 5003 已监听 (pid $PORT)"
+    echo "   本机:   http://127.0.0.1:5003"
     LAN=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
-    [ -n "$LAN" ] && echo "   局域网: http://$LAN:8790"
-    echo "   控制台: http://127.0.0.1:8790/console"
+    [ -n "$LAN" ] && echo "   局域网: http://$LAN:5003"
+    echo "   控制台: http://127.0.0.1:5003/console"
   else
-    echo "   ⚠️ 端口 8790 未监听，看日志: $LOG_DIR/server.err.log"
+    echo "   ⚠️ 端口 5003 未监听，看日志: $LOG_DIR/server.err.log"
   fi
 else
   echo "   ⚠️ 未在 launchctl 列表看到 $LABEL"
