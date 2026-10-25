@@ -134,6 +134,19 @@ describe("renderIndexPage：侧边栏", () => {
     const html = renderDayPage(day, {}, index.days, "2026-10-23");
     expect(html).toContain('<a class="brand" href="/"');
   });
+
+  it("窄屏下侧栏被隐藏，头部有指向主页的品牌链接", () => {
+    const html = renderIndexPage(index);
+    expect(html).toContain('<a class="mobile-brand" href="/"');
+    const dayHtml = renderDayPage(day, {}, index.days, "2026-10-23");
+    expect(dayHtml).toContain('<a class="mobile-brand" href="/"');
+  });
+
+  it("head 里声明 favicon（svg 优先，png 兑底）", () => {
+    const html = renderIndexPage(index);
+    expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg">');
+    expect(html).toContain('<link rel="icon" href="/favicon.png"');
+  });
 });
 
 describe("renderIndexPage：日期列表", () => {

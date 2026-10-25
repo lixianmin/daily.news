@@ -92,6 +92,18 @@ describe("页面路由", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("javascript");
   });
+
+  it("favicon.svg 可访问", async () => {
+    const response = await fetch(`${base}/favicon.svg`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/svg+xml");
+  });
+
+  it("favicon.png 可访问（不支持 svg 的浏览器兑底）", async () => {
+    const response = await fetch(`${base}/favicon.png`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/png");
+  });
 });
 
 describe("API 路由", () => {

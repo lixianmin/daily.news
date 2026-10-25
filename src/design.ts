@@ -96,6 +96,8 @@ a{color:inherit;text-decoration:none}
 
 /* ── 侧边栏 ──────────────────────────────────── */
 .brand{display:block;padding:0 18px 12px;text-decoration:none;color:inherit}
+/* 窄屏下侧栏整体隐藏，品牌链接在 .main 顶部补一份（样式在底部 860px 媒体查询里） */
+.mobile-brand{display:none}
 .brand h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.01em;transition:color .15s}
 .brand:hover h1{color:var(--accent)}
 .brand .sub{color:var(--muted);font-size:12px;margin-top:2px}
@@ -324,15 +326,17 @@ a.card-title:hover{color:var(--accent)}
 
 .toc-fab{
   width:44px;height:44px;border-radius:50%;
-  border:1px solid var(--line);background:var(--surface);color:var(--fg-2);
+  /* 默认就是实底主题色：米色背景上半透明白底几乎看不见（用户实测），必须一眼能找到 */
+  border:1px solid var(--accent);background:var(--accent);color:#fff;
   box-shadow:var(--shadow-lift);cursor:pointer;font-size:17px;line-height:1;
   display:flex;align-items:center;justify-content:center;
   -webkit-tap-highlight-color:transparent;
   /* 按钮也能拖着走 */
   touch-action:none;user-select:none;-webkit-user-select:none;
 }
-.toc-fab:hover{color:var(--accent);border-color:var(--accent-line)}
-.toc-fab[aria-expanded="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.toc-fab:hover{filter:brightness(1.1)}
+/* 展开态反转：浅底色字，与默认实底拉开区别，读作「已打开，可关闭」 */
+.toc-fab[aria-expanded="true"]{background:var(--surface);color:var(--accent);border-color:var(--accent-line)}
 .toc-fab.dragging{cursor:grabbing}
 
 .toc-float{
@@ -387,6 +391,7 @@ a.card-title:hover{color:var(--accent)}
 @media (max-width:860px){
   .shell{display:block}
   .sidebar{display:none}
+  .mobile-brand{display:block;padding:12px 4px 0;font-size:15px;font-weight:650;letter-spacing:.01em;color:var(--fg);text-decoration:none}
   .main{padding:0 14px 72px}
   .page-head h2{font-size:20px}
   .day-row{flex-wrap:wrap;gap:8px}

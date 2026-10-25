@@ -40,6 +40,21 @@ export function createPagesApi(store: Store) {
     }
   });
 
+  // favicon：svg 优先（见 renderShell 里的 link 声明），png 兜底不支持 svg 的浏览器
+  for (const [file, type] of [
+    ["favicon.svg", "image/svg+xml"],
+    ["favicon.png", "image/png"],
+  ] as const) {
+    api.get(`/${file}`, async (ctx) => {
+      try {
+        const bytes = await readFile(join(import.meta.dir, "..", "..", "public", file));
+        return ctx.body(bytes, 200, { "content-type": type });
+      } catch {
+        return ctx.body(null, 404);
+      }
+    });
+  }
+
   return api;
 }
 

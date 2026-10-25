@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 品牌色取 design.ts 的 --accent（琥珀），白字 Daily Digest 的 D -->
+  <rect width="64" height="64" rx="14" fill="#b45309"/>
+  <text x="32" y="45" font-family="-apple-system,'Helvetica Neue',Arial,sans-serif" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">D</text>
+</svg>

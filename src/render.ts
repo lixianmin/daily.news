@@ -56,13 +56,15 @@ function layout(options: LayoutOptions): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(options.title)}</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" href="/favicon.png">
 <style>${TOKENS}${STYLES}</style>
 ${options.head ?? ""}
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar" id="sidebar">${options.sidebar}</aside>
-  <div class="main"><div class="wrap" id="top">${options.body}</div></div>
+  <div class="main"><a class="mobile-brand" href="/" title="回到主页">Daily Digest</a><div class="wrap" id="top">${options.body}</div></div>
 </div>
 <div class="toc-dock" id="tocDock">
   <div class="toc-float" id="tocFloat" hidden>
