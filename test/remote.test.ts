@@ -67,6 +67,21 @@ describe("Remote Control 页面", () => {
     expect(html).toContain("id=\"remoteSleep\"");
   });
 
+  it("两个按钮都带图标", async () => {
+    const html = await (await fetch(`${base}/remote`)).text();
+    // 图标是按钮里的 .ico 字形（aria-hidden，靠旁边的文字说明）
+    expect(html).toContain("☀");
+    expect(html).toContain("☾");
+    expect([...html.matchAll(/class="ico"/g)]).toHaveLength(2);
+  });
+
+  it("按钮永远并排（窄屏也不堆叠）", async () => {
+    const html = await (await fetch(`${base}/remote`)).text();
+    // 样式内联在页面里：grid 两列，且没有把窄屏改回单列的规则
+    expect(html).toContain(".remote-grid{display:grid;grid-template-columns:1fr 1fr");
+    expect(html).not.toContain(".remote-grid{grid-template-columns:1fr}");
+  });
+
   it("remote.js 能编译（纯 JS 不参与 tsc）", async () => {
     const source = await readFile(join(import.meta.dir, "..", "public", "remote.js"), "utf8");
     expect(() => new Function(source)).not.toThrow();

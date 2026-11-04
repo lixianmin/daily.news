@@ -390,16 +390,20 @@ a.card-title:hover{color:var(--accent)}
 
 /* ── Remote Control ───────────────────────────── */
 /* 两个大按钮：手机上一点就中，不用瞄准 */
+/* 两个按钮永远并排：手机上也要一行两个（单列堆叠反而不方便点） */
 .remote-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 16px}
 @media (max-width:560px){
-  .remote-grid{grid-template-columns:1fr}
+  .remote-btn{padding:14px 8px;font-size:15px}
 }
 .remote-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
   padding:18px 16px;border-radius:var(--radius);border:1px solid var(--line);
   background:var(--surface);color:var(--fg);font-size:16px;font-weight:600;
   cursor:pointer;font-family:inherit;box-shadow:var(--shadow);
   transition:border-color .12s,box-shadow .12s;
 }
+/* 按钮上的图标：字形比图片轻，跟项目里 ☰ ✕ ↗ 那些同一路 */
+.remote-btn .ico{font-size:19px;line-height:1;flex:0 0 auto}
 .remote-btn:hover{border-color:var(--accent);box-shadow:var(--shadow-lift)}
 .remote-btn:disabled{opacity:.5;cursor:default}
 .remote-btn.wake{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}

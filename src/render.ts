@@ -513,8 +513,8 @@ export function renderRemotePage(): string {
   </div>
 </div>
 <div class="remote-grid">
-  <button class="remote-btn wake" id="remoteWake" type="button">唤醒屏幕</button>
-  <button class="remote-btn sleep" id="remoteSleep" type="button">关闭屏幕</button>
+  <button class="remote-btn wake" id="remoteWake" type="button"><span class="ico" aria-hidden="true">☀</span>唤醒屏幕</button>
+  <button class="remote-btn sleep" id="remoteSleep" type="button"><span class="ico" aria-hidden="true">☾</span>关闭屏幕</button>
 </div>
 <div class="remote-status" id="remoteStatus"></div>`;
 
