@@ -1,15 +1,16 @@
 #!/bin/bash
-# fetch.sh — 抓取四个热点来源，保存到 <dataDir>/runs/<日期>/ 下（纯抓取，不调用 LLM）
+# fetch.sh — 抓取三个热点来源，保存到 <dataDir>/runs/<日期>/ 下（纯抓取，不调用 LLM）
+# Twitter 不在这里：它走 pi-chrome（用户真实 Chrome 的已登录会话），见 src/chrome/twitter.ts
 # 数据目录来自环境变量 DAILY_NEWS_DATA_DIR（服务调用时注入），默认 ~/Documents/daily-news
 # 用法:
 #   ./fetch.sh           抓取全部来源
-#   ./fetch.sh --sources gh,hn,zhihu,twitter  只抓指定来源
+#   ./fetch.sh --sources gh,hn,zhihu  只抓指定来源
 #   ./fetch.sh --date 2025-01-01  指定日期目录（默认今天）
 set -o pipefail
 
 DATA_DIR="${DAILY_NEWS_DATA_DIR:-$HOME/Documents/daily-news}"
 DATE="$(date +%F)"
-SOURCES="gh,hn,zhihu,twitter"
+SOURCES="gh,hn,zhihu"
 UA_MOBILE="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 LOG="$DATA_DIR/logs/fetch.log"
 
@@ -151,28 +152,13 @@ PYEOF
   ok "zhihu $n 条"
 }
 
-# ---------- Twitter / X 时间线（dokobot 浏览器登录态） ----------
-fetch_twitter() {
-  if ! dokobot read --local --screens 6 --timeout 120 "https://x.com/home" > "$RUN_DIR/twitter_raw.txt" 2>"$RUN_DIR/.twitter.err"; then
-    fail twitter "dokobot 抓取失败: $(head -c 200 "$RUN_DIR/.twitter.err")"; return 1
-  fi
-  # 真实性校验：占位页/登录墙时行数少且无 @handle，判失败重试
-  local n h
-  n="$(wc -l < "$RUN_DIR/twitter_raw.txt")"
-  h="$(grep -cE '@[A-Za-z0-9_]{2,}' "$RUN_DIR/twitter_raw.txt" || true)"
-  if [ "$n" -lt 30 ] || [ "$h" -lt 5 ]; then
-    fail twitter "未渲染出推文（占位页/登录墙：$n 行，$h 个 @）"; return 1
-  fi
-  ok "twitter 原始文本 $n 行"
-}
-
 # ---------- 汇总元信息 ----------
 meta() {
   cat > "$RUN_DIR/meta.txt" <<EOF
 抓取时间: $(date '+%F %T')
-来源: GitHub Trending / Hacker News / 知乎熱榜 / Twitter 時間線
+来源: GitHub Trending / Hacker News / 知乎熱榜
 状态:
-$(for f in gh.md hn.md zhihu.md twitter_raw.txt; do [ -s "$RUN_DIR/$f" ] && echo "  $f: $(wc -c < "$RUN_DIR/$f") bytes" || echo "  $f: 缺失"; done)
+$(for f in gh.md hn.md zhihu.md; do [ -s "$RUN_DIR/$f" ] && echo "  $f: $(wc -c < "$RUN_DIR/$f") bytes" || echo "  $f: 缺失"; done)
 EOF
 }
 
@@ -181,7 +167,6 @@ run_source() {
     gh)      retry 2 4 fetch_gh ;;
     hn)      retry 2 4 fetch_hn ;;
     zhihu)   retry 3 8 fetch_zhihu ;;
-    twitter) retry 4 12 fetch_twitter ;;
     *) echo "未知来源: $1" >&2 ;;
   esac
 }
@@ -208,15 +193,14 @@ done
 meta
 
 total=0
-for f in gh.md hn.md zhihu.md twitter_raw.txt; do [ -s "$RUN_DIR/$f" ] && total=$((total+1)); done
+for f in gh.md hn.md zhihu.md; do [ -s "$RUN_DIR/$f" ] && total=$((total+1)); done
 echo
 echo "==== 汇总 ===="
 echo "目录: $RUN_DIR"
-echo "成功来源: $total/4"
+echo "成功来源: $total/3"
 for f in gh.md hn.md zhihu.md; do
   [ -s "$RUN_DIR/$f" ] && printf "  %-12s %s 条\n" "$f" "$(grep -c '^- ' "$RUN_DIR/$f")"
 done
-[ -s "$RUN_DIR/twitter_raw.txt" ] && printf "  %-12s %s 行原始文本\n" "twitter_raw.txt" "$(wc -l < "$RUN_DIR/twitter_raw.txt")"
 
 # 保留策略：runs 保留 7 天，日志保留 30 天
 find "$DATA_DIR/runs" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true

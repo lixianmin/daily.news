@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { fetchTwitterRaw } from "./chrome/twitter.ts";
 import { DATA_DIR, fetchScript, runsDir, todayInShanghai, weekdayOf } from "./config.ts";
 import { enrichSection, buildMetaIndexes, limitSectionItems } from "./enrich.ts";
 import { logger } from "./logo.ts";
@@ -111,7 +112,7 @@ function emit(
 /** 跑抓取脚本。返回是否成功，不抛。 */
 async function runFetch(date: string, sources: SourceKey[]): Promise<{ ok: boolean; error?: string }> {
   const bin = fetchScript();
-  // fetch.sh 的 --sources 用抓取脚本自己的名字（gh/hn/zhihu/twitter），与内部 key 不同
+  // fetch.sh 的 --sources 用抓取脚本自己的名字（gh/hn/zhihu），与内部 key 不同
   const scriptNames = sources.map(scriptName).join(",");
 
   logger.info("fetch started", { date, sources: scriptNames });
@@ -149,6 +150,22 @@ function scriptName(key: SourceKey): string {
     default:
       return key;
   }
+}
+
+/**
+ * Twitter 来源：走 pi-chrome（用户真实 Chrome 的已登录会话）。
+ *
+ * 失败不抛——Twitter 只是四个来源之一，挂了其它三个照常出稿，
+ * 页面上该来源标 ⚠️。返回错误原因（成功时 undefined）。
+ */
+async function fetchTwitterSource(date: string): Promise<string | undefined> {
+  const result = await fetchTwitterRaw({ dataDir: DATA_DIR, date });
+  if (!result.ok) {
+    logger.warn("twitter fetch failed", { date, error: result.error });
+    return result.error ?? "抓取失败";
+  }
+  logger.info("twitter fetched", { date, count: result.count, role: result.role ?? null });
+  return undefined;
 }
 
 interface Chunk {
@@ -278,7 +295,13 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
     // 全量生成：清掉上次的抓取产物，避免读到旧的
     await rm(runsDir(date), { recursive: true, force: true });
   }
-  const fetched = await runFetch(date, sources);
+
+  // Twitter 走 Chrome 扩展（真实浏览器的登录态），其余三个走 fetch.sh。
+  // 顺序：先删旧产物再抓，否则 twitter_raw.txt 会被上次的残留顶掉。
+  const twitterError = sources.includes("twitter") ? await fetchTwitterSource(date) : undefined;
+
+  const shellSources = sources.filter((key) => key !== "twitter");
+  const fetched = shellSources.length === 0 ? { ok: true } : await runFetch(date, shellSources);
   if (!fetched.ok) {
     logger.error("fetch failed", { date, error: fetched.error });
     emit(onProgress, "error", `抓取失败：${fetched.error ?? "未知"}`);
@@ -332,6 +355,11 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
       });
       logger.warn("chunk failed", { source: chunk.key, error: result.error });
     }
+  }
+
+  // Twitter 抓取就失败了（没进分块阶段）：标成失败，页面上显示 ⚠️
+  if (twitterError !== undefined) {
+    statuses.twitter = mergeSourceStatus(statuses.twitter, { ok: false, count: 0, error: twitterError });
   }
 
   // 4) 合并 → 回填元信息 → 机翻

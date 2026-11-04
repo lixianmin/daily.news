@@ -105,7 +105,8 @@ bun run link:needle
 ## 架构
 
 ```
-fetch.sh（curl + dokobot）→ runs/<date>/*.md
+fetch.sh（curl）→ runs/<date>/*.md
+pi-chrome（真实 Chrome 的已登录会话）→ runs/<date>/twitter_raw.txt
    ↓ 按来源分块（twitter / zhihu×2 / gh / hn），每个来源最多 10 条
 pi --no-tools --system-prompt（deepseek，失败切 zai-coding-cn）
    ↓ 模型输出 JSON（规范见 prompts/format.md）
@@ -149,7 +150,10 @@ bun run src/main.ts       # 前台起服务（改代码调试用）
 
 ## 已知限制
 
-- Twitter 抓取依赖 dokobot + 已登录的 Chrome；Chrome 没开时该源标记失败，其余三个源不受影响。
+- Twitter 抓取靠 pi-chrome：它在 `127.0.0.1:17318` 上开一条本地“桥”，Chrome 里的伴侣扩展
+  长轮询取命令。服务与 pi session 共用同一个端口——谁先起谁当 owner，另一方当 client 转发，
+  两边可以同时用。Chrome 没开时服务会拉起它（已开则不抢前台）；拉起后扩展仍未连上，
+  该源标记失败，其余三个源不受影响。
 - 机翻用免费的 Google 端点（非正式 API），限流时降级 MyMemory，两者都挂则保留纯英文。
 - GitHub 趋势当天只有几条就写几条，不硬凑。
 - 失败重试最多 3 次（间隔 10 分钟），之后仍失败就在页面上标 ⚠️，不再重试。

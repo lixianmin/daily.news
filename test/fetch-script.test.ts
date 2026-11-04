@@ -13,6 +13,19 @@ import { join } from "node:path";
  */
 const SCRIPT_PATH = join(import.meta.dir, "..", "scripts", "fetch.sh");
 
+describe("fetch.sh 不再抓 Twitter", () => {
+  it("没有 dokobot 残留（Twitter 改走 pi-chrome）", async () => {
+    const script = await readFile(SCRIPT_PATH, "utf8");
+    expect(script).not.toContain("dokobot");
+    expect(script).not.toContain("fetch_twitter");
+  });
+
+  it("默认来源只有三个", async () => {
+    const script = await readFile(SCRIPT_PATH, "utf8");
+    expect(script).toContain('SOURCES="gh,hn,zhihu"');
+  });
+});
+
 describe("fetch.sh 条数限制", () => {
   it("默认取 10 条", async () => {
     const script = await readFile(SCRIPT_PATH, "utf8");
