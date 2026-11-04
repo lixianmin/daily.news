@@ -49,6 +49,8 @@ interface LayoutOptions {
   toc: string;
   /** 详情页为 true：窄屏下侧栏隐藏，左上角显式给「← 回到主页」。首页自己是主页，不显。 */
   homeBack?: boolean;
+  /** 浮动目录。Remote Control 这页没有章节，默认不挂。 */
+  showToc?: boolean;
 }
 
 function layout(options: LayoutOptions): string {
@@ -69,7 +71,10 @@ ${options.head ?? ""}
   <aside class="sidebar" id="sidebar">${options.sidebar}</aside>
   <div class="main">${options.homeBack ? '<a class="mobile-brand" href="/" title="回到主页">← 回到主页</a>' : ""}<div class="wrap" id="top">${options.body}</div></div>
 </div>
-<div class="toc-dock" id="tocDock">
+${
+  options.showToc === false
+    ? ""
+    : `<div class="toc-dock" id="tocDock">
   <div class="toc-float" id="tocFloat" hidden>
     <div class="toc-head" id="tocHead">
       <span class="toc-title">目录</span>
@@ -79,7 +84,8 @@ ${options.head ?? ""}
     <div class="toc-body" id="tocBody">${options.toc}</div>
   </div>
   <button class="toc-fab" id="tocFab" type="button" aria-label="目录" aria-expanded="false" aria-controls="tocFloat">☰</button>
-</div>
+</div>`
+}
 </body>
 </html>`;
 }
@@ -190,6 +196,9 @@ function renderSidebar(options: SidebarOptions): string {
   ${history === "" ? '<div class="side-link" style="color:var(--faint)">暂无</div>' : history}
 </div>
 ${sections}
+<div class="side-group">
+  <a class="side-link" href="/remote">Remote Control</a>
+</div>
 ${options.footer ?? ""}
 </div>`;
 }
@@ -489,6 +498,51 @@ ${sections}
     homeBack: true,
     body,
   });
+}
+
+/**
+ * Remote Control 页：远程开关这台机器的显示器。
+ *
+ * 只管显示器——主机不会因此睡眠（需求里划的边界）。
+ */
+export function renderRemotePage(): string {
+  const body = `<div class="page-head">
+  <div>
+    <h2>Remote Control</h2>
+    <div class="meta">远程开关这台机器的显示器 · 主机继续运行，不会进入睡眠</div>
+  </div>
+</div>
+<div class="remote-grid">
+  <button class="remote-btn wake" id="remoteWake" type="button">唤醒屏幕</button>
+  <button class="remote-btn sleep" id="remoteSleep" type="button">关闭屏幕</button>
+</div>
+<div class="remote-status" id="remoteStatus"></div>`;
+
+  return layout({
+    title: "Remote Control",
+    head: `<script src="/remote.js" defer></script>`,
+    sidebar: renderRemoteSidebar(),
+    toc: "",
+    body,
+    homeBack: true,
+    showToc: false,
+  });
+}
+
+/** Remote Control 页的侧边栏：只有品牌与两个去处，没有历史列表。 */
+function renderRemoteSidebar(): string {
+  return `<div class="side-top">
+  <a class="brand" href="/" title="回到主页">
+    <h1>Daily Digest</h1>
+    <div class="sub">每日热点摘要</div>
+  </a>
+</div>
+<div class="side-bottom">
+<div class="side-group">
+  <a class="side-link active" href="/remote"><span class="dot"></span><span>Remote Control</span></a>
+  <a class="side-link" href="/"><span>← 所有日期</span></a>
+</div>
+</div>`;
 }
 
 /** 搜索结果片段。 */

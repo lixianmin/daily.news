@@ -388,6 +388,26 @@ a.card-title:hover{color:var(--accent)}
 .toc-link.active .count{color:var(--accent)}
 .toc-top-link{color:var(--muted);font-size:12px;margin:0 8px}
 
+/* ── Remote Control ───────────────────────────── */
+/* 两个大按钮：手机上一点就中，不用瞄准 */
+.remote-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 16px}
+@media (max-width:560px){
+  .remote-grid{grid-template-columns:1fr}
+}
+.remote-btn{
+  padding:18px 16px;border-radius:var(--radius);border:1px solid var(--line);
+  background:var(--surface);color:var(--fg);font-size:16px;font-weight:600;
+  cursor:pointer;font-family:inherit;box-shadow:var(--shadow);
+  transition:border-color .12s,box-shadow .12s;
+}
+.remote-btn:hover{border-color:var(--accent);box-shadow:var(--shadow-lift)}
+.remote-btn:disabled{opacity:.5;cursor:default}
+.remote-btn.wake{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.remote-btn.wake:hover{border-color:var(--accent)}
+.remote-status{font-size:13px;color:var(--muted);min-height:22px}
+.remote-status.ok{color:var(--up)}
+.remote-status.err{color:var(--accent)}
+
 /* ── 窄屏 ────────────────────────────────────── */
 @media (max-width:860px){
   .shell{display:block}

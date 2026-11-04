@@ -1,16 +1,20 @@
 import type { HonoxApp } from "@needle/honox";
 import type { Scheduler } from "../scheduler.ts";
 import type { Store } from "../store.ts";
+import type { DisplayControl } from "../display.ts";
 import { createDaysApi } from "./days.ts";
 import { createHealthApi } from "./health.ts";
 import { createPagesApi } from "./pages.ts";
 import { createRegenApi } from "./regen.ts";
+import { createRemoteApi } from "./remote.ts";
 import { createStreamApi } from "./stream.ts";
 
 /** 接口层要用的东西。显式传，不用模块级单例：测试要能塞临时目录与假生成。 */
 export interface ApiDeps {
   store: Store;
   scheduler: Scheduler;
+  /** 显示器控制。测试塞假实现，不真的去关用户的屏幕。 */
+  display: DisplayControl;
 }
 
 /**
@@ -24,6 +28,7 @@ export function registerApis(app: HonoxApp, deps: ApiDeps): void {
   app.route("/", createPagesApi(deps.store));
   app.route("/", createDaysApi(deps.store));
   app.route("/", createRegenApi(deps.scheduler));
+  app.route("/", createRemoteApi(deps.display));
   app.route("/", createStreamApi(deps.scheduler));
   app.route("/", createHealthApi(deps.store, deps.scheduler));
 

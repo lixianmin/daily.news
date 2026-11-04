@@ -3,6 +3,7 @@ import type { Logger } from "@needle/logo";
 import type { Command } from "@needle/shell";
 import { registerApis } from "./api/index.ts";
 import { DATA_DIR, HOSTNAME, PORT, formatShanghai, queueDbPath, todayInShanghai } from "./config.ts";
+import { createDisplayControl, type DisplayControl } from "./display.ts";
 import { generateDay } from "./generator.ts";
 import { flushLogs, initLog, logger } from "./logo.ts";
 import { createScheduler, type Scheduler } from "./scheduler.ts";
@@ -36,6 +37,8 @@ export interface ServerOptions {
   shellUsers?: Record<string, string>;
   /** 面板 token 密钥。测试用；生产从 `shell.secret` 读。 */
   shellSecret?: string;
+  /** 显示器控制。测试用假实现；生产用真实的系统命令。 */
+  display?: DisplayControl;
 }
 
 /**
@@ -117,7 +120,7 @@ export async function buildApp(options: ServerOptions = {}) {
     ...(shell === undefined ? {} : { shell }),
   });
 
-  registerApis(app, { store, scheduler });
+  registerApis(app, { store, scheduler, display: options.display ?? createDisplayControl() });
 
   // 队列与 worker 总是要起来的——它才是定时生成的主体
   await scheduler.start();
