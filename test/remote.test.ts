@@ -71,6 +71,28 @@ describe("Remote Control 页面", () => {
     const source = await readFile(join(import.meta.dir, "..", "public", "remote.js"), "utf8");
     expect(() => new Function(source)).not.toThrow();
   });
+
+  it("remote.js 能访问", async () => {
+    const response = await fetch(`${base}/remote.js`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("javascript");
+  });
+
+  /**
+   * 回归：新增前端脚本却忘了登记路由，页面看着正常但脚本 404、按钮点了没反应。
+   * 这条断言把每个页面引用的脚本都真的取一遍——漏登记当场红。
+   */
+  it("页面引用的每个脚本都能取到（漏登记路由 = 按钮全死）", async () => {
+    for (const path of ["/remote", "/"] as const) {
+      const html = await (await fetch(`${base}${path}`)).text();
+      const sources = [...html.matchAll(/<script src="([^"]+)"/g)].map((match) => match[1] ?? "");
+      expect(sources.length).toBeGreaterThan(0);
+      for (const src of sources) {
+        const response = await fetch(`${base}${src}`);
+        expect({ path, src, status: response.status }).toEqual({ path, src, status: 200 });
+      }
+    }
+  });
 });
 
 describe("Remote Control 接口", () => {

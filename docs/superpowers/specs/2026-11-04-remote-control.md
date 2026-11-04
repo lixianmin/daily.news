@@ -54,6 +54,11 @@ src/render.ts         renderRemotePage()：页面 HTML
 src/design.ts         .remote-* 样式
 ```
 
+`public/remote.js` 必须由 `src/api/pages.ts` **显式登记路由**（`/remote.js`）：
+本仓没有静态文件中间件，漏登记就是脚本 404——页面看着正常，但按钮没有事件
+处理器，点了毫无反应。`test/remote.test.ts` 有一条断言把每个页面引用的
+`<script src>` 都真的取一遍，漏登记当场红。
+
 分层照本项目既有习惯：
 
 - 命令拼装与执行放 `src/display.ts`，不认识 HTTP

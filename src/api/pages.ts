@@ -31,14 +31,19 @@ export function createPagesApi(store: Store) {
     return ctx.html(renderDayPage(day, { newer, older }, index.days, todayInShanghai()));
   });
 
-  api.get("/app.js", async (ctx) => {
-    try {
-      const js = await readFile(join(import.meta.dir, "..", "..", "public", "app.js"), "utf8");
-      return ctx.body(js, 200, { "content-type": "application/javascript; charset=utf-8" });
-    } catch {
-      return ctx.body("// app.js missing", 404, { "content-type": "application/javascript" });
-    }
-  });
+  // 前端脚本：本仓没有静态文件中间件，public/ 下的 .js 要在这里显式登记路由。
+  // 新增脚本文件时忘了登记，页面看着正常但脚本 404、交互全死——
+  // 所以列表放在这里，且 test/remote.test.ts 断言页面里每个 <script src> 都能取到。
+  for (const file of ["app.js", "remote.js"] as const) {
+    api.get(`/${file}`, async (ctx) => {
+      try {
+        const js = await readFile(join(import.meta.dir, "..", "..", "public", file), "utf8");
+        return ctx.body(js, 200, { "content-type": "application/javascript; charset=utf-8" });
+      } catch {
+        return ctx.body(`// ${file} missing`, 404, { "content-type": "application/javascript" });
+      }
+    });
+  }
 
   // favicon：svg 优先（见 layout 里的 link 声明），png 兜底不支持 svg 的浏览器；
   // apple-touch-icon 给 iOS 添加到主屏幕用
