@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { mergeSourceStatus } from "../src/generator.ts";
+import { attemptedSources, fillMissingStatuses, mergeSourceStatus } from "../src/generator.ts";
+import { SOURCE_KEYS } from "../src/types.ts";
 
 /**
  * 多块来源的状态统计。
@@ -9,6 +10,31 @@ import { mergeSourceStatus } from "../src/generator.ts";
  * `{ ok: true, count: 5 }` —— 明明有 5 条数据，页面却显示「知乎失败」，
  * 还会触发一次没必要的补生成。
  */
+describe("attemptedSources", () => {
+  it("全量生成：四个来源都算本轮的", () => {
+    expect(attemptedSources([...SOURCE_KEYS])).toEqual([...SOURCE_KEYS]);
+  });
+
+  it("补生成：只算要补的那几个", () => {
+    expect(attemptedSources([...SOURCE_KEYS], ["twitter"])).toEqual(["twitter"]);
+  });
+});
+
+describe("fillMissingStatuses", () => {
+  it("本轮负责但没产出的来源补一条失败状态", () => {
+    const statuses = fillMissingStatuses({ twitter: { ok: true, count: 8 } }, ["twitter", "github"]);
+    expect(statuses.twitter).toEqual({ ok: true, count: 8 });
+    expect(statuses.github).toEqual({ ok: false, count: 0, error: "无数据或生成失败" });
+  });
+
+  it("补生成时不给没轮到的来源加失败状态（核心回归）", () => {
+    // 曾经的 bug：补生成只补了 twitter，却按“四个来源”补失败状态，
+    // 页面上凭空多出三个 ⚠️，重试链也一直带着它们。
+    const statuses = fillMissingStatuses({ twitter: { ok: true, count: 8 } }, ["twitter"]);
+    expect(Object.keys(statuses)).toEqual(["twitter"]);
+  });
+});
+
 describe("mergeSourceStatus", () => {
   it("第一块成功：ok 为 true，条数正确", () => {
     const status = mergeSourceStatus(undefined, { ok: true, count: 5 });

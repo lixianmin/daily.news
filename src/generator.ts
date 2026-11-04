@@ -168,6 +168,38 @@ async function fetchTwitterSource(date: string): Promise<string | undefined> {
   return undefined;
 }
 
+/**
+ * 本轮实际负责的来源。
+ *
+ * 全量生成时是全部四个；补生成（`retryFailedSources`）时只有要补的那几个。
+ *
+ * 抓取、补失败状态、算失败来源都按这个集合来。补生成时若还按“四个来源”算，
+ * 没补的那三个会被标成「无数据或生成失败」——页面上凭空多出三个 ⚠️，
+ * 而且失败来源集合也会一直把它们算进去，重试链停不下来。
+ */
+export function attemptedSources(sources: SourceKey[], retrying?: SourceKey[]): SourceKey[] {
+  return retrying ?? sources;
+}
+
+/**
+ * 给本轮负责、但没产出章节的来源补一条失败状态。
+ *
+ * 页面按 `sources[key].ok === false` 显示 ⚠️，所以漏掉的来源要显式标出来。
+ * 但只标本轮负责的——补生成时没轮到的来源，成品里本来就该保留原状态。
+ */
+export function fillMissingStatuses(
+  statuses: Partial<Record<SourceKey, SourceStatus>>,
+  attempted: SourceKey[],
+): Partial<Record<SourceKey, SourceStatus>> {
+  const result = { ...statuses };
+  for (const key of attempted) {
+    if (result[key] === undefined) {
+      result[key] = { ok: false, count: 0, error: "无数据或生成失败" };
+    }
+  }
+  return result;
+}
+
 interface Chunk {
   key: SourceKey;
   path: string;
@@ -287,6 +319,8 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
   const startedAt = Date.now();
   // 补生成模式：只重试失败的那些来源，已成功的章节原样保留
   const retrying = options.retryFailedSources;
+  // 本轮实际负责的来源。补生成时只有要补的那几个。
+  const attempted = attemptedSources(sources, retrying);
   logger.info("generate started", { date, sources, retrying: retrying ?? null });
 
   // 1) 抓取
@@ -298,9 +332,9 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
 
   // Twitter 走 Chrome 扩展（真实浏览器的登录态），其余三个走 fetch.sh。
   // 顺序：先删旧产物再抓，否则 twitter_raw.txt 会被上次的残留顶掉。
-  const twitterError = sources.includes("twitter") ? await fetchTwitterSource(date) : undefined;
+  const twitterError = attempted.includes("twitter") ? await fetchTwitterSource(date) : undefined;
 
-  const shellSources = sources.filter((key) => key !== "twitter");
+  const shellSources = attempted.filter((key) => key !== "twitter");
   const fetched = shellSources.length === 0 ? { ok: true } : await runFetch(date, shellSources);
   if (!fetched.ok) {
     logger.error("fetch failed", { date, error: fetched.error });
@@ -398,14 +432,12 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
   }
 
   // 没生成成功的来源补一条失败状态，页面据此显示 ⚠️
-  for (const key of sources) {
-    if (statuses[key] === undefined) {
-      statuses[key] = { ok: false, count: 0, error: "无数据或生成失败" };
-    }
-  }
+  // 只标本轮负责的：补生成时没轮到的来源，成品里保留原状态
+  const finalStatuses = fillMissingStatuses(statuses, attempted);
 
   // 本轮失败的来源——决定要不要重试、重试哪些
-  const failedSources = sources.filter((key) => statuses[key]?.ok !== true);
+  // 只看本轮负责的：没轮到的来源不算失败（否则重试链会一直带着它们）
+  const failedSources = attempted.filter((key) => finalStatuses[key]?.ok !== true);
 
   // 5) 落盘
   emit(onProgress, "write", "写入数据目录…", { ratio: 0.9 });
@@ -413,7 +445,7 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
   // 补生成模式：跟已有成品合并——成功的章节原样保留，
   // 只把这次补上的来源替换进去。整份覆盖的话，其它来源会凭空消失。
   let finalSections = sections;
-  let finalSources = statuses;
+  let finalSources = finalStatuses;
   if (retrying !== undefined) {
     const existing = await store.readDay(date);
     if (existing !== null) {
@@ -423,7 +455,7 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
       }
       // 按 SOURCE_KEYS 的固定顺序排，页面显示才稳定
       finalSections = SOURCE_KEYS.filter((key) => merged.has(key)).map((key) => merged.get(key)!);
-      finalSources = { ...existing.sources, ...statuses };
+      finalSources = { ...existing.sources, ...finalStatuses };
       logger.info("merged retry into existing day", {
         date,
         kept: existing.sections.length,
