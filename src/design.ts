@@ -199,16 +199,17 @@ a.card-title:hover{color:var(--accent)}
 .duo > .en{padding-right:28px;border-right:1px solid var(--line-2)}
 .duo > .zh{padding-left:28px}
 /* 译文里的换行是原文的段落结构，要保留（推文是一行一句） */
-.duo > .en,.duo > .zh{white-space:pre-wrap}
+.duo .tx{white-space:pre-wrap}
 .duo > .zh:empty{display:none}
 .card-sum{color:var(--fg-2);font-size:14px;line-height:1.62}
 .card-sum .zh{color:var(--muted)}
-/* 夹行必须作用在直接包含文本的列上——挂在 grid 容器 (.duo) 上不生效。
-   列在 .duo 里面，所以要用后代选择器，不能用 > .en。 */
-.card-sum.clamp .en,
-.card-sum.clamp .zh{
+/* 夹行必须作用在直接包含文本的元素上——文本在 .tx 里（按钮在它外面，
+   一起夹会把按钮也夹掉），所以用后代选择器。 */
+.card-sum.clamp .tx{
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
 }
+/* 每列下面各一个展开按钮：左右分屏时，右下角那个按钮看着像只属于繁中那列 */
+.duo .expand-btn{margin-top:6px}
 /* 窄屏：两列堆叠，但保持英文在前 */
 @media (max-width:720px){
   .duo{grid-template-columns:1fr;gap:6px}
@@ -216,8 +217,9 @@ a.card-title:hover{color:var(--accent)}
   .duo > .zh{padding-left:0}
   .duo > .zh:not(:empty){padding-top:6px;border-top:1px dashed var(--line-2)}
 }
+
+/* 只剩附加链接（HN 的「讨论」）。展开按钮在两列正文下面，不在这里 */
 .card-foot{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
-.card-foot .spacer{flex:1}
 /* 只剩附加链接（HN 的「讨论」）用它：原文入口是标题与 @handle，不另给按钮 */
 .link-btn{
   display:inline-flex;align-items:center;gap:4px;font-size:12.5px;

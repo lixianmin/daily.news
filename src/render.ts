@@ -258,18 +258,40 @@ function renderChips(item: DigestItem): string {
 }
 
 /**
+ * 这条要不要给展开按钮。
+ *
+ * 两列都看：中文译文有时比英文长（中文更省字，但英文译文可能更啰嗦），
+ * 只看英文会让另一列被夹住却没有按钮可点。
+ */
+function needsExpandButton(en: string, zh: string): boolean {
+  return Math.max(en.length, zh.length) > 150;
+}
+
+/** 展开/收起按钮。两列各一个，文字由脚本同步。 */
+const EXPAND_BUTTON = '<button class="expand-btn" type="button">More ▾</button>';
+
+/**
  * 一条正文的中英对照：左英右繁。
  *
  * 两列内容一致——英文是原文，繁中是同一句的翻译。
- * 翻译拿不到时右列留空（CSS 里 `:empty` 隐藏），左列不受影响。
+ * 翻译拿不到时右列整个不渲染（原来是靠 CSS `:empty` 隐藏）。
  *
- * `en` 传进来的必须是**已转义好的 HTML**（Twitter 的要点里含 handle 链接，
- * 不能再转一次）；`zh` 是纯文本，这里负责转义。
+ * **每一列下面各有一个展开按钮**：电脑上左右分屏时，右下角那个按钮看着像
+ * 只属于繁中那列。点任意一个都是同一个动作——两列一起展开或收起。
+ *
+ * 文本包在 `.tx` 里，按钮在它外面：夹行（line-clamp）作用在文本上，
+ * 按钮要是也在里面就会被一起夹掉。
+ *
+ * `en` 传进来的必须是**已转义好的 HTML**；`zh` 是纯文本，这里负责转义。
  */
-function renderDuo(enHtml: string, zh: string, cls: string): string {
+function renderDuo(enHtml: string, zh: string, cls: string, needsExpand: boolean): string {
+  const button = needsExpand ? EXPAND_BUTTON : "";
+  // 译文为空：右列留空，CSS 的 `:empty` 会把它藏掉（含它的按钮）
+  const zhInner = zh.trim() === "" ? "" : `<div class="tx">${escapeHtml(zh)}</div>${button}`;
+
   return `<div class="duo">
-  <div class="${cls} en">${enHtml}</div>
-  <div class="${cls} zh">${escapeHtml(zh)}</div>
+  <div class="${cls} en"><div class="tx">${enHtml}</div>${button}</div>
+  <div class="${cls} zh">${zhInner}</div>
 </div>`;
 }
 
@@ -292,12 +314,7 @@ function renderItemCard(item: DigestItem, source: SourceKey): string {
     .join("");
 
   // 摘要默认夹三行，点「More」展开
-  const needsExpand = item.en.length > 150;
-  // 卡片标题本身就是原文入口（知乎→问题页、GitHub→仓库、HN→原文），
-  // 不再单独给「原文」按钮。「讨论」这类附加链接还是要留。
-  const foot = [extra, needsExpand ? '<button class="expand-btn" type="button">More ▾</button>' : ""]
-    .filter((part) => part !== "")
-    .join("");
+  const needsExpand = needsExpandButton(item.en, item.zh);
 
   return `<article class="card">
   <div class="card-top">
@@ -305,8 +322,8 @@ function renderItemCard(item: DigestItem, source: SourceKey): string {
     <div class="card-title">${title}</div>
   </div>
   ${renderChips(item)}
-  <div class="card-sum${needsExpand ? " clamp" : ""}" data-full="${escapeHtml(item.en)}">${renderDuo(escapeHtml(item.en), item.zh, "sum")}</div>
-  ${foot === "" ? "" : `<div class="card-foot">${extra}<span class="spacer"></span>${needsExpand ? '<button class="expand-btn" type="button">More ▾</button>' : ""}</div>`}
+  <div class="card-sum${needsExpand ? " clamp" : ""}" data-full="${escapeHtml(item.en)}">${renderDuo(escapeHtml(item.en), item.zh, "sum", needsExpand)}</div>
+  ${extra === "" ? "" : `<div class="card-foot">${extra}</div>`}
 </article>`;
 }
 
@@ -343,17 +360,12 @@ function renderTweetItem(item: CategoryItem): string {
   const when = item.time === undefined || item.time === "" ? "" : `<span class="when">${escapeHtml(item.time)}</span>`;
 
   // 摘要默认夹三行，点「More」展开
-  const needsExpand = item.en.length > 150;
+  const needsExpand = needsExpandButton(item.en, item.zh);
 
   // 不再单独给「原文」按钮：行首的 @handle 本身就是那条推文的入口
   return `<li class="cat-item">
   <div class="pt-top">${renderSourceTag("twitter")} ${who} ${when}</div>
-  <div class="card-sum${needsExpand ? " clamp" : ""}">${renderDuo(escapeHtml(item.en), item.zh, "pt")}</div>
-  ${
-    needsExpand
-      ? `<div class="card-foot"><span class="spacer"></span><button class="expand-btn" type="button">More ▾</button></div>`
-      : ""
-  }
+  <div class="card-sum${needsExpand ? " clamp" : ""}">${renderDuo(escapeHtml(item.en), item.zh, "pt", needsExpand)}</div>
 </li>`;
 }
 

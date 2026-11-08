@@ -43,6 +43,15 @@ zhihu.md ──parseZhihu──▶ 标题 + 摘要片段 + 链接
 - **解析**：`parseZhihu()` 从 `zhihu.md` 取问题标题、答案摘要片段、热度、链接。
 - **不走模型**：知乎正文直接翻译，没有总结环节。卡片标题保持中文原题（链到问题页），正文左英右繁，夹三行可展开。
 
+### 展开按钮：左右两列各一个
+
+电脑上左右分屏时，展开按钮原来只在右下角，看着像只属于繁中那列。
+现在**每列正文下面各有一个按钮**，功能完全一样：点任意一个都是同一个动作——
+两列一起展开或一起收起，两个按钮的文案同步（不会一个写 More 一个写 Less）。
+
+实现上文本单独包一层 `.tx`，按钮在它外面：夹行（line-clamp）作用在文本上，
+按钮要是也在里面会被一起夹掉。
+
 ### 原文入口只有一个
 
 正文与标题本身就是原文入口，不再另给「原文 ↗」按钮：
@@ -82,10 +91,10 @@ zhihu.md ──parseZhihu──▶ 标题 + 摘要片段 + 链接
 | `src/llm.ts` | `parseTweetCategories()` / `parseTranslations()`；`parseSection` 不再管 Twitter |
 | `prompts/format.md` | Twitter 章节改成「只分主题」schema |
 | `src/generator.ts` | Twitter / 知乎走直译管线（`DIRECT_SOURCES`），GitHub / HN 不变 |
-| `src/render.ts` | Twitter 逐条推文的渲染（handle 链到推文）；去掉重复的「原文」按钮 |
+| `src/render.ts` | Twitter 逐条推文的渲染（handle 链到推文）；去掉重复的「原文」按钮；两列各一个展开按钮 |
 | `scripts/fetch.sh` | 知乎摘要片段上限 180 → 1500（页面展开后要看完整段落） |
 | `src/design.ts` | 修 `.card-sum.clamp` 选择器；译文保留换行；补 Twitter 条目样式 |
-| `public/app.js` | 展开按钮兼容 Twitter 条目（`.cat-item`） |
+| `public/app.js` | 展开按钮兼容 Twitter 条目（`.cat-item`）；点一个按钮时同步容器内所有按钮的文案 |
 
 ## 删掉的东西
 
@@ -105,4 +114,7 @@ zhihu.md ──parseZhihu──▶ 标题 + 摘要片段 + 链接
 - 2026-11-08 的真实抓取产物跑通：Twitter 9 条分 5 个主题、知乎 10 条，译文与原文逐句对应。
 - 折叠在真实浏览器里验过（CDP）：`-webkit-line-clamp` 3 → none，高度 68px → 884px（长摘要），再点收回。
 - 页面上「原文」按钮数量为 0：入口是标题与 `@handle`。
+- 展开按钮在真实浏览器里验过（CDP）：每条两个按钮（英文列 + 繁中列），
+  点英文列那个 → 两列 `line-clamp` 一起变 `none`、高度 68px → 272px/181px，
+  两个按钮文案同步变 `Less ▴`；再点繁中列那个 → 一起收回。
 - 模型兜底实测可用（当天 Google 与 MyMemory 都被打到限流）。

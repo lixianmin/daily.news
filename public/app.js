@@ -29,7 +29,11 @@
     }
 
     const clamped = summary.classList.toggle("clamp");
-    button.textContent = clamped ? "More ▾" : "Less ▴";
+    // 两列各有一个按钮，点哪个都要同步——不然一个写着 More 一个写着 Less
+    const label = clamped ? "More ▾" : "Less ▴";
+    for (const other of container.querySelectorAll(".expand-btn")) {
+      other.textContent = label;
+    }
   });
 
   // ---------- 浮动目录 ----------
