@@ -43,6 +43,14 @@ zhihu.md ──parseZhihu──▶ 标题 + 摘要片段 + 链接
 - **解析**：`parseZhihu()` 从 `zhihu.md` 取问题标题、答案摘要片段、热度、链接。
 - **不走模型**：知乎正文直接翻译，没有总结环节。卡片标题保持中文原题（链到问题页），正文左英右繁，夹三行可展开。
 
+### 原文入口只有一个
+
+正文与标题本身就是原文入口，不再另给「原文 ↗」按钮：
+
+- Twitter：行首 `@handle` 链到那条推文。
+- 知乎 / GitHub / Hacker News：卡片标题链到原文（知乎→问题页、GitHub→仓库、HN→原文或讨论页）。
+- 只有 HN 的「讨论」这类**不同地址**的附加链接还留按钮。
+
 ### 翻译链路
 
 `toBilingual(texts, translator)` 一次处理一批：英文原文只翻繁中（一趟），中文/日文/韩文原文既翻英文也翻繁中（两趟）。返回与入参等长，翻不出来的位置是空串，失败的那一列退回原文。
@@ -52,6 +60,11 @@ zhihu.md ──parseZhihu──▶ 标题 + 摘要片段 + 链接
 1. Google 免费端点（`sl=auto`）——逐条串行，请求间留 250ms 间隔（突发并发会被打成 429）。
 2. MyMemory——不同服务商，配额更小。
 3. **模型兜底**——前两级都拿不到时，把失败的那批交给 deepseek，用专门的「只许逐字翻译，不许总结/合并/删减」system prompt，一次调用翻整批（`translateWithModel`），返回条数必须与输入一致，否则整批作废。
+
+**超长文本先切段**：MyMemory 单次硬上限 500 字符，超了它把
+`QUERY LENGTH LIMIT EXCEEDED. MAX ALLOWED QUERY : 500 CHARS` 当译文返回（HTTP 200、`quotaFinished: null`）。
+所以 `splitForTranslation()` 按 450 字符切段（段落 → 句末 → 逗号 → 空格 → 硬切，拼回去等于原文），
+逐段翻完再拼接；并且检测这条警告串，命中就当失败，不让它写进页面。
 
 模型的翻译 prompt 与摘要 prompt 完全分开：摘要那套允许概括，翻译这套明确禁止。
 
@@ -64,12 +77,13 @@ zhihu.md ──parseZhihu──▶ 标题 + 摘要片段 + 链接
 | `src/zhihu.ts`（新） | `parseZhihu()` + `buildZhihuSection()` + `buildZhihuSectionFromRuns()` |
 | `src/twitter.ts`（新） | `buildTwitterChunk()` / `assignTweets()` / `buildTwitterSection()` / `buildTwitterSectionFromRuns()` |
 | `src/translate.ts` | `Translator` 改成批量；`toBilingual()`；`translateSection()` 一次批量翻 |
-| `src/translator.ts` | 三级降级 + 请求间隔 + 模型兜底 |
+| `src/translator.ts` | 三级降级 + 请求间隔 + 长文本切段 + 模型兜底 |
 | `src/model.ts` | `callChannels` 抽出通用双通道调用；`categorizeTweets()`；`translateWithModel()` |
 | `src/llm.ts` | `parseTweetCategories()` / `parseTranslations()`；`parseSection` 不再管 Twitter |
 | `prompts/format.md` | Twitter 章节改成「只分主题」schema |
 | `src/generator.ts` | Twitter / 知乎走直译管线（`DIRECT_SOURCES`），GitHub / HN 不变 |
-| `src/render.ts` | Twitter 逐条推文的渲染（handle 链到推文） |
+| `src/render.ts` | Twitter 逐条推文的渲染（handle 链到推文）；去掉重复的「原文」按钮 |
+| `scripts/fetch.sh` | 知乎摘要片段上限 180 → 1500（页面展开后要看完整段落） |
 | `src/design.ts` | 修 `.card-sum.clamp` 选择器；译文保留换行；补 Twitter 条目样式 |
 | `public/app.js` | 展开按钮兼容 Twitter 条目（`.cat-item`） |
 
@@ -82,11 +96,13 @@ zhihu.md ──parseZhihu──▶ 标题 + 摘要片段 + 链接
 ## 已知限制
 
 - 推文正文截断在 600 字（沿用原限制），超长推文看不到全文。
-- 知乎的摘要片段本身在抓取层截断到 180 字（`fetch.sh`），所以「完整段落」最长为那 180 字。
+- 知乎的摘要片段来自聚合接口的 `hover` 字段，最多约 1200 字；抓取层上限设 1500，实测不截断。
+- 长摘要翻译变慢：10 条约 1200 字，一轮约 3~4 分钟（切段后请求数变多）。
 - 两个免费端点都挂时走模型兜底，一轮多花 1~3 分钟。
 
 ## 实测
 
 - 2026-11-08 的真实抓取产物跑通：Twitter 9 条分 5 个主题、知乎 10 条，译文与原文逐句对应。
-- 折叠在真实浏览器里验过（CDP）：`-webkit-line-clamp` 3 → none，高度 68px → 159px，再点收回。
+- 折叠在真实浏览器里验过（CDP）：`-webkit-line-clamp` 3 → none，高度 68px → 884px（长摘要），再点收回。
+- 页面上「原文」按钮数量为 0：入口是标题与 `@handle`。
 - 模型兜底实测可用（当天 Google 与 MyMemory 都被打到限流）。

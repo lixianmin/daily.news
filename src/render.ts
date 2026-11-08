@@ -257,15 +257,6 @@ function renderChips(item: DigestItem): string {
   return chips.length === 0 ? "" : `<div class="chips">${chips.join("")}</div>`;
 }
 
-/** 「原文 ↗」按钮。 */
-function renderOriginalLink(url: string | undefined, label = "原文"): string {
-  const safe = safeUrl(url);
-  if (safe === undefined) {
-    return "";
-  }
-  return `<a class="link-btn" href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)} <span class="ext">↗</span></a>`;
-}
-
 /**
  * 一条正文的中英对照：左英右繁。
  *
@@ -296,12 +287,17 @@ function renderItemCard(item: DigestItem, source: SourceKey): string {
       if (safe === undefined) {
         return "";
       }
-      return `<a class="link-btn quiet" href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)} ↗</a>`;
+      return `<a class="link-btn" href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)} ↗</a>`;
     })
     .join("");
 
   // 摘要默认夹三行，点「More」展开
   const needsExpand = item.en.length > 150;
+  // 卡片标题本身就是原文入口（知乎→问题页、GitHub→仓库、HN→原文），
+  // 不再单独给「原文」按钮。「讨论」这类附加链接还是要留。
+  const foot = [extra, needsExpand ? '<button class="expand-btn" type="button">More ▾</button>' : ""]
+    .filter((part) => part !== "")
+    .join("");
 
   return `<article class="card">
   <div class="card-top">
@@ -310,12 +306,7 @@ function renderItemCard(item: DigestItem, source: SourceKey): string {
   </div>
   ${renderChips(item)}
   <div class="card-sum${needsExpand ? " clamp" : ""}" data-full="${escapeHtml(item.en)}">${renderDuo(escapeHtml(item.en), item.zh, "sum")}</div>
-  <div class="card-foot">
-    ${renderOriginalLink(item.url)}
-    ${extra}
-    <span class="spacer"></span>
-    ${needsExpand ? '<button class="expand-btn" type="button">More ▾</button>' : ""}
-  </div>
+  ${foot === "" ? "" : `<div class="card-foot">${extra}<span class="spacer"></span>${needsExpand ? '<button class="expand-btn" type="button">More ▾</button>' : ""}</div>`}
 </article>`;
 }
 
@@ -354,14 +345,15 @@ function renderTweetItem(item: CategoryItem): string {
   // 摘要默认夹三行，点「More」展开
   const needsExpand = item.en.length > 150;
 
+  // 不再单独给「原文」按钮：行首的 @handle 本身就是那条推文的入口
   return `<li class="cat-item">
   <div class="pt-top">${renderSourceTag("twitter")} ${who} ${when}</div>
   <div class="card-sum${needsExpand ? " clamp" : ""}">${renderDuo(escapeHtml(item.en), item.zh, "pt")}</div>
-  <div class="card-foot">
-    ${renderOriginalLink(item.url)}
-    <span class="spacer"></span>
-    ${needsExpand ? '<button class="expand-btn" type="button">More ▾</button>' : ""}
-  </div>
+  ${
+    needsExpand
+      ? `<div class="card-foot"><span class="spacer"></span><button class="expand-btn" type="button">More ▾</button></div>`
+      : ""
+  }
 </li>`;
 }
 

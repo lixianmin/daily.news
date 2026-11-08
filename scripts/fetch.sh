@@ -31,8 +31,10 @@ log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG"; }
 
 # 每个来源取前几条。10 条刚好够看完热点，又不至于把摘要稀释成流水账。
 ITEM_LIMIT="${DAILY_NEWS_ITEM_LIMIT:-10}"
+# 知乎摘要片段的长度上限。页面把它当正文展示（可展开），不是预览。
+EXCERPT_LIMIT="${DAILY_NEWS_EXCERPT_LIMIT:-1500}"
 # 导出给 Python 子进程：heredoc 用的是 'PYEOF'（带引号），shell 变量不会展开
-export ITEM_LIMIT
+export ITEM_LIMIT EXCERPT_LIMIT
 
 ok()   { printf 'OK   %s\n' "$1" | tee -a "$LOG"; }
 fail() { printf 'FAIL %s  %s\n' "$1" "$2" | tee -a "$LOG"; }
@@ -139,8 +141,11 @@ for it in items[:int(os.environ.get("ITEM_LIMIT", "10"))]:
     url = f"https://www.zhihu.com/question/{qid}" if qid else ''
     extra = it.get('extra') or {}
     info = (extra.get('info') or '').strip()
+    # 摘要片段整段保留：页面展开后要显示的是完整段落，不是 180 字预览。
+    # EXCERPT_LIMIT 只是防异常长的保险（接口实测最多 1200 字左右）。
     hover = re.sub(r'\s+', ' ', (extra.get('hover') or '')).strip()
-    if len(hover) > 180: hover = hover[:180] + '…'
+    excerpt_limit = int(os.environ.get("EXCERPT_LIMIT", "1500"))
+    if len(hover) > excerpt_limit: hover = hover[:excerpt_limit] + '…'
     meta = f"（{info}）" if info else ""
     tail = f"  — {hover}" if hover and hover != t else ""
     out.append(f"- **{t}**{tail}{meta}  |  {url}")

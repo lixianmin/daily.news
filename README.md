@@ -2,7 +2,7 @@
 
 每天自动抓取 **X/Twitter 時間線 · 知乎熱榜 · GitHub Trending · Hacker News**，整理成「英文在左、繁體中文在右」的对照页面，结构化落盘，开网页随时翻阅。
 
-Twitter 与知乎是**原文直译**（不总结）：每条都是原推文/原问题，默认夹三行，点「More ▾」看全文；行首 `@handle` 直接跳到那条推文。GitHub / Hacker News 仍是 LLM 摘要。
+Twitter 与知乎是**原文直译**（不总结）：每条都是原推文/原问题，默认夹三行，点「More ▾」看全文。原文入口就是标题与行首的 `@handle`（链到那条推文，不是作者主页），不另给「原文」按钮。GitHub / Hacker News 仍是 LLM 摘要。
 
 每天东八区 **07:00** 自动生成当天内容；某个来源失败会在 10 分钟后自动补生成，最多 3 次。
 
@@ -135,6 +135,9 @@ days/<date>.json + index.json → Hono 渲染
   引擎直译原文——这样读者看到的是那条推文本身，不是被压缩的要点。
 - **推文直链从抓取产物里取**。`parseTwitterRaw` 认脚注区的 `/status/` 链接；
   靠 handle 反查作者主页的做法已删（同一作者多条推文时必然对不上）。
+- **长文本翻译要先切段**。MyMemory 单次 500 字符上限，超了它把
+  `QUERY LENGTH LIMIT EXCEEDED` 当译文返回（HTTP 200，不报错）。
+  `splitForTranslation` 按 450 字切段，拼回去等于原文。
 - **元信息从抓取层回填**。模型不知道星数、points，
   由 `src/meta.ts` 按标题关联回去。
 - **Hono 原生提供 HTTP server**。`export default { port, hostname, fetch }`，

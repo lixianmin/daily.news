@@ -218,15 +218,13 @@ a.card-title:hover{color:var(--accent)}
 }
 .card-foot{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .card-foot .spacer{flex:1}
+/* 只剩附加链接（HN 的「讨论」）用它：原文入口是标题与 @handle，不另给按钮 */
 .link-btn{
-  display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--accent);
-  border:1px solid var(--accent-line);background:var(--accent-soft);
-  padding:3px 9px;border-radius:var(--radius-sm);white-space:nowrap;
+  display:inline-flex;align-items:center;gap:4px;font-size:12.5px;
+  padding:3px 4px;border-radius:var(--radius-sm);white-space:nowrap;
+  background:transparent;border:1px solid transparent;color:var(--muted);
 }
-.link-btn:hover{filter:brightness(.97)}
-.link-btn.quiet{background:transparent;border-color:transparent;color:var(--muted);padding:3px 4px}
-.link-btn.quiet:hover{color:var(--accent);background:transparent}
-.link-btn .ext{font-size:10px;opacity:.75}
+.link-btn:hover{color:var(--accent)}
 .expand-btn{
   border:0;background:transparent;color:var(--muted);font-size:12.5px;cursor:pointer;
   padding:3px 4px;font-family:inherit;

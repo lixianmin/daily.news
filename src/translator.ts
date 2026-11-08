@@ -12,6 +12,56 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const TARGET_LANG = "zh-TW";
 
 /**
+ * 单次请求的字符上限。
+ *
+ * MyMemory 硬性限制 500 字符，超了直接返回一句
+ * `QUERY LENGTH LIMIT EXCEEDED. MAX ALLOWED QUERY : 500 CHARS` 当译文——
+ * 不报错，只是把这句话写进页面。所以超长文本必须先切段。
+ * 取 450 留余量：URL 编码后长度会膨胀。
+ */
+const MAX_CHUNK_CHARS = 450;
+
+/** 断句优先级：段落 → 句末 → 逗号 → 空格 → 硬切。 */
+const BREAK_MARKS = ["\n", "。", "！", "？", ". ", "! ", "? ", "；", ";", "，", ", ", " "];
+
+/**
+ * 把长文本切成不超过 450 字符的段，拼回去等于原文。
+ *
+ * 逐段翻完再拼，这样免费端点的 500 字符上限不会把整段吞成一句错误提示。
+ */
+export function splitForTranslation(text: string): string[] {
+  if (text === "") {
+    return [];
+  }
+  const parts: string[] = [];
+  let rest = text;
+
+  while (rest.length > MAX_CHUNK_CHARS) {
+    const head = rest.slice(0, MAX_CHUNK_CHARS);
+    const cut = findBreak(head);
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if (rest !== "") {
+    parts.push(rest);
+  }
+  return parts;
+}
+
+/** 在窗口内找一个合适的断开点（下标，不含）。找不到就硬切。 */
+function findBreak(window: string): number {
+  // 从后往前找最靠后的断句标记，让每段尽量满
+  for (const mark of BREAK_MARKS) {
+    const at = window.lastIndexOf(mark);
+    // 断点太靠前会让段落碎成一片，宁可继续试下一个标记
+    if (at >= window.length / 2) {
+      return at + mark.length;
+    }
+  }
+  return window.length;
+}
+
+/**
  * 源语言判断（只给 MyMemory 用）。
  *
  * Google 端点支持 `sl=auto` 自己判源语言；MyMemory 必须给明确的对，
@@ -101,8 +151,17 @@ async function myMemoryTranslate(text: string, target: TargetLang): Promise<stri
   if (typeof translated !== "string" || translated.trim() === "") {
     throw new Error("mymemory 返回空译文");
   }
+  // 配额用尽/查询过长时，MyMemory 把警告文字放在 translatedText 里当译文返回
+  // （HTTP 200，quotaFinished 是 null）。不拦的话页面上就会出现
+  // 「QUERY LENGTH LIMIT EXCEEDED. MAX ALLOWED QUERY : 500 CHARS」这种"译文"。
+  if (MYMEMORY_WARNING.test(translated)) {
+    throw new Error(`mymemory 拒绝：${translated.slice(0, 80)}`);
+  }
   return translated;
 }
+
+/** MyMemory 把警告塞进译文里的特征串。 */
+const MYMEMORY_WARNING = /QUERY LENGTH LIMIT EXCEEDED|MYMEMORY WARNING|INVALID (SOURCE|TARGET) LANGUAGE/i;
 
 /**
  * 造一个翻译器。
@@ -137,8 +196,6 @@ export function createTranslator(options: { dir?: string } = {}): Translator {
       } else {
         results[index] = value;
       }
-      // 请求之间留间隔：突发并发是触发限流的主因
-      await sleep(REQUEST_GAP_MS);
     }
 
     if (failed.length === 0) {
@@ -158,8 +215,28 @@ export function createTranslator(options: { dir?: string } = {}): Translator {
     return results;
   };
 
-  /** 逐条翻译：Google 优先，失败落 MyMemory。 */
+  /**
+   * 逐条翻译：先按 450 字切段（免费端点单次有硬上限），逐段 Google → MyMemory。
+   * 任何一段拿不到就整条判失败，交给上层走模型兜底——
+   * 半条译文（前后两段语言不同）比没有更难看。
+   */
   async function translateOne(text: string, target: TargetLang, googleEnabled: () => boolean): Promise<string> {
+    const pieces = splitForTranslation(text);
+    const translated: string[] = [];
+
+    for (const piece of pieces) {
+      const value = await translatePiece(piece, target, googleEnabled);
+      if (value === "") {
+        return "";
+      }
+      translated.push(value);
+      await sleep(REQUEST_GAP_MS);
+    }
+    return translated.join("");
+  }
+
+  /** 翻一段（不超过 450 字）：Google 优先，失败落 MyMemory。 */
+  async function translatePiece(text: string, target: TargetLang, googleEnabled: () => boolean): Promise<string> {
     if (googleEnabled()) {
       try {
         return await googleTranslate(text, target);

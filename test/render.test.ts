@@ -228,10 +228,11 @@ describe("renderDayPage：卡片", () => {
     expect(html).toContain('href="https://github.com/owner/repo"');
   });
 
-  it("有明确的「原文」按钮", () => {
+  it("标题本身就是原文入口，不重复给「原文」按钮", () => {
     const html = renderDayPage(day);
-    expect(html).toContain("原文");
-    expect(html).toContain('class="link-btn"');
+    // 卡片标题已经链到原文；再给一个同地址的按钮是重复动作
+    expect(html).not.toContain(">原文 ");
+    expect(html).toContain('href="https://github.com/owner/repo"');
   });
 
   it("GitHub 元信息渲染成 chip", () => {
@@ -280,10 +281,12 @@ describe("renderDayPage：卡片", () => {
     const html = renderDayPage(day);
     expect(html).toContain('href="https://x.com/simonw/status/123"');
     expect(html).toContain("@simonw");
-    // 行首那个 handle 是可点的
+    // 行首那个 handle 是可点的，且就是这条推文的入口
     expect(html).toContain('class="who" href="https://x.com/simonw/status/123"');
     // 相对时间也显示出来
     expect(html).toContain("2h");
+    // 不再另给一个同地址的「原文」按钮
+    expect(html).not.toContain(">原文 ");
   });
 
   it("Twitter 正文是左英右繁两列", () => {
