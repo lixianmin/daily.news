@@ -8,69 +8,17 @@ import { logger } from "./logo.ts";
 import { generateSection } from "./model.ts";
 import type { Store } from "./store.ts";
 import { translateSection, type Translator } from "./translate.ts";
+import { buildTwitterSectionFromRuns } from "./twitter.ts";
+import { buildZhihuSectionFromRuns } from "./zhihu.ts";
 import type { DigestDay, DigestSection, ProgressEvent, SourceKey, SourceStatus } from "./types.ts";
 import { SOURCE_FILES, SOURCE_KEYS, SOURCE_TITLES } from "./types.ts";
 
-/** Twitter 分块上限。超过会触发限流，原项目实测 12KB 可用。 */
-const TWITTER_CHUNK_BYTES = 20_000;
-
-/** 单条推文正文保留的长度。截断是为了控总量，不是为了内容完整。 */
-const TWEET_TEXT_LIMIT = 600;
-
 /**
- * Twitter 分块的构造。
+ * 不走模型、正文直接翻译的来源。
  *
- * 两个坑：
- *
- * 1. 不能把 twitter_raw.txt 整块丢给模型——里面是整页推文的全文，长且杂，
- *    容易被带跑（实测模型会输出 DSML 工具调用而不是 JSON）。
- * 2. 只取首行（作者+互动数）也不行——模型没正文可总结，会输出空数组。
- *
- * 所以：保留首行与正文，但正文用 `<tweet_text>` 包起来，标成「数据」；
- * 再配合 model.ts 里的专用 system prompt，模型就知道这是待总结的内容，
- * 而不是要执行的指令。
+ * 模型只给推文分主题（Twitter），知乎连模型都不碰——正文是原文的直译。
  */
-export function buildTwitterChunk(raw: string): string {
-  const lines = raw.split("\n");
-  const kept: string[] = [];
-
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-
-    // 推文首行：`**作者（简介）** @handle [1]·2h [2]`
-    if (line.startsWith("**") && line.includes("@")) {
-      kept.push(line);
-
-      // 收集到下一条推文或分隔线为止的正文
-      const body: string[] = [];
-      let j = i + 1;
-      while (j < lines.length) {
-        const next = lines[j] ?? "";
-        if (next.trim() === "---" || (next.startsWith("**") && next.includes("@"))) {
-          break;
-        }
-        body.push(next);
-        j += 1;
-      }
-      const text = body.join("\n").trim();
-      if (text !== "") {
-        kept.push(`<tweet_text>${text.slice(0, TWEET_TEXT_LIMIT)}</tweet_text>`);
-      }
-      i = j;
-      continue;
-    }
-
-    // 互动数行：`37 Replies 8 reposts 287 Likes 58111 views [3]`
-    if (/^\d+\s+(Replies|reposts|Likes|views)/i.test(line.trim())) {
-      kept.push(line.trim());
-    }
-    i += 1;
-  }
-
-  const joined = kept.join("\n");
-  return joined.length > TWITTER_CHUNK_BYTES ? joined.slice(0, TWITTER_CHUNK_BYTES) : joined;
-}
+const DIRECT_SOURCES: readonly SourceKey[] = ["twitter", "zhihu"];
 
 /** 抓取脚本的超时。dokobot 抓 X 可到 120s，四个源串行，给足余量。 */
 const FETCH_TIMEOUT_MS = 10 * 60 * 1000;
@@ -209,6 +157,9 @@ interface Chunk {
  * 读取某天的抓取产物，切分成模型调用用的块。
  *
  * `only` 给了就只切这些来源（补生成模式）。
+ *
+ * 只有走模型的来源（GitHub / Hacker News）才需要分块。Twitter 与知乎的正文
+ * 是原文的直译，不经模型。
  */
 async function prepareChunks(date: string, only?: SourceKey[]): Promise<Chunk[]> {
   const dir = runsDir(date);
@@ -217,6 +168,9 @@ async function prepareChunks(date: string, only?: SourceKey[]): Promise<Chunk[]>
 
   const wanted = only ?? [...SOURCE_KEYS];
   for (const key of wanted) {
+    if (DIRECT_SOURCES.includes(key)) {
+      continue;
+    }
     const source = join(dir, SOURCE_FILES[key]);
     let content: string;
     try {
@@ -225,26 +179,6 @@ async function prepareChunks(date: string, only?: SourceKey[]): Promise<Chunk[]>
       continue; // 该来源没抓到
     }
     if (content.trim() === "") {
-      continue;
-    }
-
-    if (key === "twitter") {
-      // 只取推文首行与互动数——全文太长且杂，模型容易被带跑去调工具
-      const cleaned = buildTwitterChunk(content);
-      const path = join(dir, "_twitter.txt");
-      await writeFile(path, cleaned, "utf8");
-      chunks.push({ key, path });
-      continue;
-    }
-
-    if (key === "zhihu") {
-      // 知乎拆两块：单块 20 条会让模型漏条，原项目实测拆成 1-10 / 11-20 更稳
-      const lines = content.split("\n");
-      const first = join(dir, "_zhihu1.txt");
-      const second = join(dir, "_zhihu2.txt");
-      await writeFile(first, lines.slice(2, 12).join("\n"), "utf8");
-      await writeFile(second, lines.slice(12).join("\n"), "utf8");
-      chunks.push({ key, path: first }, { key, path: second });
       continue;
     }
 
@@ -301,6 +235,14 @@ export function mergeSourceStatus(
   return { ok: true, count: previous.count, error: `部分块失败：${outcome.error ?? "生成失败"}` };
 }
 
+/** 一个章节里有多少条（Twitter 是要点数，其余是条目数）。 */
+function countSectionItems(section: DigestSection): number {
+  if (section.kind === "items") {
+    return section.items.length;
+  }
+  return section.categories.reduce((sum, category) => sum + category.items.length, 0);
+}
+
 /** 一个来源有几条数据，用于「抓到了但没生成成功」时的状态描述。 */
 function countSourceLines(content: string): number {
   return content.split("\n").filter((line) => line.startsWith("- ")).length;
@@ -342,9 +284,10 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
     return { ok: false, error: fetched.error ?? "抓取失败" };
   }
 
-  // 2) 分块
+  // 2) 分块（只有走模型的来源需要）
   const chunks = await prepareChunks(date, retrying);
-  if (chunks.length === 0) {
+  const directSources = attempted.filter((key) => DIRECT_SOURCES.includes(key));
+  if (chunks.length === 0 && directSources.length === 0) {
     logger.error("no chunks", { date });
     emit(onProgress, "error", "四个来源都没抓到数据");
     return { ok: false, error: "四个来源都没抓到数据" };
@@ -391,6 +334,26 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
     }
   }
 
+  // 3.5) 直译来源：Twitter 与知乎的正文是原文的直译，不经模型
+  for (const key of directSources) {
+    emit(onProgress, "translate", `翻译「${SOURCE_TITLES[key]}」…`, { source: key });
+    try {
+      const section =
+        key === "twitter"
+          ? await buildTwitterSectionFromRuns({ runsDir: runsDir(date), translator })
+          : await buildZhihuSectionFromRuns({ runsDir: runsDir(date), translator });
+      produced.set(key, [section]);
+      statuses[key] = mergeSourceStatus(statuses[key], {
+        ok: true,
+        count: countSectionItems(section),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.warn("direct section failed", { source: key, error: reason });
+      statuses[key] = mergeSourceStatus(statuses[key], { ok: false, count: 0, error: reason });
+    }
+  }
+
   // Twitter 抓取就失败了（没进分块阶段）：标成失败，页面上显示 ⚠️
   if (twitterError !== undefined) {
     statuses.twitter = mergeSourceStatus(statuses.twitter, { ok: false, count: 0, error: twitterError });
@@ -415,7 +378,10 @@ export async function generateDay(options: GenerateDayOptions): Promise<Generate
     const limited = limitSectionItems(merged);
     const enriched = await enrichSection(limited, { runsDir: runsDir(date), date }, metaIndexes);
 
-    emit(onProgress, "translate", `翻译「${SOURCE_TITLES[key]}」…`, { source: key });
+    // 直译来源在 3.5 已经翻完并报过进度，这里只补分类标题的繁中
+    if (!DIRECT_SOURCES.includes(key)) {
+      emit(onProgress, "translate", `翻译「${SOURCE_TITLES[key]}」…`, { source: key });
+    }
     try {
       sections.push(await translateSection(enriched, { translator }));
     } catch (error) {

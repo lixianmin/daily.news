@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { extractHnMeta, extractTwitterLinks, parseGithubMeta } from "./meta.ts";
+import { extractHnMeta, parseGithubMeta } from "./meta.ts";
 import type { DigestSection, ItemMeta, SourceKey } from "./types.ts";
 import { SOURCE_FILES } from "./types.ts";
 
@@ -144,7 +144,7 @@ export async function enrichSection(
   indexes?: Awaited<ReturnType<typeof buildMetaIndexes>>,
 ): Promise<DigestSection> {
   if (section.kind !== "items") {
-    await enrichTwitter(section, options);
+    // Twitter：推文直链在解析层就带上了（parseTwitterRaw），这里没有要补的
     return section;
   }
 
@@ -175,47 +175,6 @@ export async function enrichSection(
   }
 
   return section;
-}
-
-/**
- * 把 Twitter 要点的作者主页链接换成推文直链。
- *
- * 模型只能从 `handles` 推出 `x.com/<handle>`（作者主页）。原始数据里
- * 有 `x.com/<handle>/status/<id>`（那条推文本身），用 handle 反查替换。
- */
-async function enrichTwitter(section: DigestSection, options: EnrichOptions): Promise<void> {
-  if (section.kind !== "categories") {
-    return;
-  }
-
-  let links: Map<string, string> | undefined;
-  for (const category of section.categories) {
-    for (const item of category.items) {
-      if (item.url === undefined) {
-        continue;
-      }
-      const handle = /\/x\.com\/([A-Za-z0-9_]+)$/.exec(item.url)?.[1];
-      if (handle === undefined) {
-        continue;
-      }
-
-      links ??= await loadTwitterLinks(options);
-      const direct = links.get(handle);
-      if (direct !== undefined) {
-        item.url = direct;
-      }
-    }
-  }
-}
-
-/** 读 twitter_raw.txt 并抽出 handle → 推文直链。 */
-async function loadTwitterLinks(options: EnrichOptions): Promise<Map<string, string>> {
-  try {
-    const raw = await readFile(join(options.runsDir, SOURCE_FILES.twitter), "utf8");
-    return extractTwitterLinks(raw);
-  } catch {
-    return new Map();
-  }
 }
 
 export { buildMetaIndexes };

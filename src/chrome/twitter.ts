@@ -8,8 +8,8 @@ import { MIN_EXTENSION_VERSION } from "./protocol.ts";
  * 用 pi-chrome 抓 Twitter（X）时间线。
  *
  * 抓取的是**用户真实 Chrome profile 里的已登录会话**（Chrome 伴侣扩展干的活），
- * 产出 `runs/<date>/twitter_raw.txt`，格式与原先 dokobot 的产物同构——下游
- * `buildTwitterChunk` / `extractTwitterLinks` 不用改。
+ * 产出 `runs/<date>/twitter_raw.txt`，格式与原先 dokobot 的产物同构——
+ * 下游 `parseTwitterRaw` 按同一套格式还原。
  */
 
 /** 一条推文。字段与页面上的可见信息一一对应，缺失就是 null。 */
@@ -194,6 +194,155 @@ export async function waitForTweets(
 }
 
 /**
+ * 从 `twitter_raw.txt` 还原出的一条推文。
+ *
+ * 与 `Tweet` 的区别：`time` 是抓取时算好的相对时间（`18h`），不是 ISO 时间；
+ * `id` 是它在文件里的序号（1 起），用来跟模型的分类结果对账。
+ */
+export interface RawTweet {
+  /** 序号，1 起。 */
+  id: number;
+  /** 显示名。 */
+  name: string;
+  /** @handle（含 @）。 */
+  handle: string;
+  /** 相对时间，如 "18h"。 */
+  time: string;
+  /** 正文全文。 */
+  text: string;
+  /** 推文直链。抓取没拿到时为空。 */
+  url?: string;
+}
+
+/**
+ * 从 `twitter_raw.txt` 还原推文列表。
+ *
+ * 文件是 `renderTwitterRaw` 的产物：正文块用 `---` 分隔，每块第一行是
+ * `**作者** @handle [1]·18h [2]`，最后是脚注区 `[N] https://x.com/...`。
+ *
+ * 推文直链**从脚注区取**，不靠 handle 反查——同一个作者发过好几条时反查必然
+ * 对不上，对不上就会退回作者主页（点开是别人的时间线，不是那条推文）。
+ */
+export function parseTwitterRaw(raw: string): RawTweet[] {
+  if (raw.trim() === "") {
+    return [];
+  }
+
+  const lines = raw.split("\n");
+
+  // 脚注区：文件末尾连续的 `[N] url` 行（与正文块之间隔一个空行）
+  const notes = new Map<string, string>();
+  let end = lines.length;
+  let blank = false;
+  while (end > 0) {
+    const line = (lines[end - 1] ?? "").trim();
+    if (line === "") {
+      // 脚注区前面有一个空行；再往前就是正文块了
+      if (blank) {
+        end -= 1;
+        break;
+      }
+      blank = true;
+      end -= 1;
+      continue;
+    }
+    const match = /^\[(\d+)\]\s+(\S+)$/.exec(line);
+    if (match === null) {
+      break;
+    }
+    notes.set(match[1] ?? "", match[2] ?? "");
+    end -= 1;
+  }
+
+  // 正文块：以 `---` 分隔
+  const blocks: string[][] = [];
+  let current: string[] = [];
+  for (const line of lines.slice(0, end)) {
+    if (line.trim() === "---") {
+      blocks.push(current);
+      current = [];
+      continue;
+    }
+    current.push(line);
+  }
+  blocks.push(current);
+
+  const tweets: RawTweet[] = [];
+  for (const block of blocks) {
+    const tweet = parseTweetBlock(block, notes, tweets.length + 1);
+    if (tweet !== undefined) {
+      tweets.push(tweet);
+    }
+  }
+  return tweets;
+}
+
+/** 首行：`**作者** @handle [1]·18h [2]`。 */
+const HEAD_PATTERN = /^\*\*(.+?)\*\*\s*(?:(@[A-Za-z0-9_]+)\s*)?\[(\d+)\]·\s*([^\[]*)\[(\d+)\]/;
+
+/** 互动数行：`37 Replies 39 reposts 188 Likes 100048 views`。 */
+const METRICS_PATTERN = /^\d+\s+(Replies|reposts|Likes|views)\b/;
+
+/** status 直链。 */
+const STATUS_URL_PATTERN = /^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/;
+
+/** 解析一个正文块。解析不出来返回 undefined（这一条丢掉）。 */
+function parseTweetBlock(
+  block: string[],
+  notes: Map<string, string>,
+  id: number,
+): RawTweet | undefined {
+  const head = HEAD_PATTERN.exec(block[0] ?? "");
+  if (head === null) {
+    return undefined;
+  }
+
+  // 互动数行在正文之后（渲染时写在最后一行）
+  const rest = block.slice(1);
+  let textLines = rest;
+  const last = rest[rest.length - 1] ?? "";
+  if (METRICS_PATTERN.test(last)) {
+    textLines = rest.slice(0, -1);
+  }
+
+  const text = textLines
+    .map((line) => unescapeBodyLine(line))
+    .join("\n")
+    .trim();
+
+  // 没正文的推文（纯图片/引用）不进正文页
+  if (text === "") {
+    return undefined;
+  }
+
+  const url = notes.get(head[5] ?? "");
+  const tweet: RawTweet = {
+    id,
+    name: (head[1] ?? "").trim(),
+    handle: head[2] ?? "",
+    time: (head[4] ?? "").trim(),
+    text,
+  };
+  if (url !== undefined && STATUS_URL_PATTERN.test(url)) {
+    tweet.url = url;
+  }
+  return tweet;
+}
+
+/**
+ * 还原抓取时给正文行加的前导空格。
+ *
+ * `renderTwitterRaw` 会给以 `**` 开头或恰好是 `---` 的行加一个前导空格，
+ * 免得被下游误判成「下一条推文」。解析回来时要把这个空格去掉。
+ */
+function unescapeBodyLine(line: string): string {
+  if (line.startsWith(" **") || line.trim() === "---") {
+    return line.slice(1);
+  }
+  return line;
+}
+
+/**
  * 推文数组 → `twitter_raw.txt` 文本。
  *
  * 形状与原 dokobot 产物一致：
@@ -208,8 +357,8 @@ export async function waitForTweets(
  * [2] https://x.com/handle/status/123
  * ```
  *
- * 下游靠三件事切分：`buildTwitterChunk` 认 `**作者** @handle` 开头与「数字 + Replies/Likes」行，
- * `extractTwitterLinks` 认脚注区的 status 直链。
+ * 下游靠三件事切分：`parseTwitterRaw` 认 `**作者** @handle` 开头与「数字 + Replies/Likes」行，
+ * 并从脚注区认 status 直链。
  */
 export function renderTwitterRaw(tweets: Tweet[], now: Date = new Date()): string {
   const blocks: string[] = [];

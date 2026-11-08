@@ -9,9 +9,12 @@
 繁體中文版本由系统另行机器翻译生成，你无需也不能产中文。
 例外：`title` 字段直接抄抓取数据里的原标题，即使它是中文也不要翻译或改写。
 
+【正文不归你管】本次要处理的来源，正文由系统**直接翻译原文**得到——
+你只负责按 schema 输出该输出的字段，**不要自己写正文、不要总结、不要改写原文**。
+
 ---
 
-## 一、逐条章节（GitHub / Hacker News / 知乎）
+## 一、逐条章节（GitHub / Hacker News）
 
 输出这个结构：
 
@@ -29,8 +32,8 @@
 
 字段规则：
 
-- `title` — 必填。直接用抓取数据里的原标题/项目名，保持原语言。知乎用问题标题，GitHub 用 `owner/repo`。
-- `url` — 必填。从抓取数据里抄，**不要自己编**。GitHub 用 `https://github.com/<owner/repo>`；HN 用原文链接，没有原文就用讨论页；知乎用 `https://www.zhihu.com/question/<id>`。
+- `title` — 必填。直接用抓取数据里的原标题/项目名，保持原语言。GitHub 用 `owner/repo`。
+- `url` — 必填。从抓取数据里抄，**不要自己编**。GitHub 用 `https://github.com/<owner/repo>`；HN 用原文链接，没有原文就用讨论页。
 - `en` — 必填。一行英文摘要，15~30 词。要具体：点明模型名/工具名/数字/做法/为什么值得点进去。不要空泛的「这是一个有趣的项目」。
 
 数量：抓取数据里有多少条就写多少条（上限 10），**一条都不要漏，也不要硬凑**。
@@ -40,39 +43,33 @@
 
 - **GitHub Trending** — 项目是做什么的 + 为什么火（今日 star 增量、语言、总 star），数字必须来自数据。
 - **Hacker News** — 这是什么 + 为何受关注（points / 评论数），保留标题原意。
-- **知乎熱榜** — 标题即问题。`en` 用英文转述问题内核，讲清「在问什么 / 为何上热榜」。
 
 ---
 
-## 二、分类章节（Twitter / X）
+## 二、Twitter 分类章节（X）
 
-Twitter 不逐条列举，分成 **3~6 个主题大类**。输出这个结构：
+Twitter 不写正文。你只做一件事：**把推文分到几个主题**。
+正文由系统直接翻译原文（英文 + 繁體中文），你一个字都不要写。
+
+输出这个结构：
 
 ```json
 {
   "categories": [
-    {
-      "title": "AI Models & Benchmarks",
-      "items": [
-        {
-          "en": "1. @simonw benchmarked Qwen and reported ... (one or two sentences, specific details)",
-          "handles": ["@simonw"]
-        }
-      ]
-    }
+    { "title": "AI Models & Safety", "tweetIds": [1, 4, 7] },
+    { "title": "Open Source & Dev", "tweetIds": [2, 5] },
+    { "title": "Finance & Markets", "tweetIds": [3, 6] }
   ]
 }
 ```
 
 字段规则：
 
-- `title` — **英文**分类标题，如 `AI Models & Benchmarks` / `Open Source & Dev` / `Finance & Markets` / `Products & Hardware` / `Current Affairs`。随内容定，3~6 个即可。
-- `items` — 该分类下 **1~3 条**要点，不要逐条罗列所有推文，宁可少而精。
-- `en` — 每条要点是一到两句英文。必须以 `1.` `2.` `3.` 这样的编号开头。
-  写清观点/细节/分歧，点明模型名/工具名/数字。
-- `handles` — 必填。写具体发帖人的 handle 数组，格式 `["@simonw"]`。
-  **严禁「有人 / 某网友 / a user」这类泛指**。每条要点至少一个真实 handle，来自抓取数据。
-- **不要在任何字段里放 URL**。需要指向推文时靠 `handles`，系统会自动生成链接。
+- `title` — **英文**分类标题，3~6 个。
+- `tweetIds` — 该分类下的推文编号。编号就是【抓取数据】里 `<tweet id="N">` 的 `N`。
+- **一条推文只归一个分类**，但**每条推文都要归类**——不要漏。
+- **不要写推文正文**，不要总结，不要改写。
+- **不要输出 URL**，不要输出 handle。
 
 ---
 

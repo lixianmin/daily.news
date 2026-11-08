@@ -46,9 +46,11 @@ const day: DigestDay = {
           titleZh: "AI 模型與基準",
           items: [
             {
-              en: "1. @simonw benchmarked Qwen and reported a 90% score on the new benchmark.",
-              zh: "1. @simonw 測試了 Qwen，在新基準上拿到 90%。",
+              en: "Simon benchmarked Qwen and reported a 90% score on the new benchmark.",
+              zh: "Simon 測試了 Qwen，在新基準上拿到 90%。",
               url: "https://x.com/simonw/status/123",
+              handle: "@simonw",
+              time: "2h",
             },
           ],
         },
@@ -274,10 +276,20 @@ describe("renderDayPage：卡片", () => {
     expect(html).not.toContain("More ▾");
   });
 
-  it("Twitter 要点里的 handle 变成链接", () => {
+  it("Twitter 行首的 handle 链到那条推文（不是作者主页）", () => {
     const html = renderDayPage(day);
     expect(html).toContain('href="https://x.com/simonw/status/123"');
     expect(html).toContain("@simonw");
+    // 行首那个 handle 是可点的
+    expect(html).toContain('class="who" href="https://x.com/simonw/status/123"');
+    // 相对时间也显示出来
+    expect(html).toContain("2h");
+  });
+
+  it("Twitter 正文是左英右繁两列", () => {
+    const html = renderDayPage(day);
+    expect(html).toContain("Simon benchmarked Qwen");
+    expect(html).toContain("Simon 測試了 Qwen");
   });
 
   it("来源标签出现在每张卡片上", () => {

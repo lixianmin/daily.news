@@ -150,17 +150,9 @@ describe("enrichSection：Hacker News 元信息与去重", () => {
   });
 });
 
-describe("enrichSection：Twitter 推文直链", () => {
-  it("把作者主页换成推文直链", async () => {
-    const dir = await setup({
-      "twitter_raw.txt": [
-        "**某推 [1]** @simonw [1]·1h [2]",
-        "正文",
-        "[1] https://x.com/simonw",
-        "[2] https://x.com/simonw/status/2113071390601458152",
-      ].join("\n"),
-    });
-
+describe("enrichSection：Twitter 不做链接反查", () => {
+  it("推文直链由解析层给出，enrich 不改它", async () => {
+    const dir = await setup({ "twitter_raw.txt": "没有脚注区" });
     const section: DigestSection = {
       key: "twitter",
       title: "Twitter",
@@ -169,7 +161,13 @@ describe("enrichSection：Twitter 推文直链", () => {
         {
           title: "AI",
           titleZh: "",
-          items: [{ en: "1. @simonw said something.", zh: "", url: "https://x.com/simonw" }],
+          items: [
+            {
+              en: "The whole internet was dumbfounded.",
+              zh: "",
+              url: "https://x.com/simonw/status/2113071390601458152",
+            },
+          ],
         },
       ],
     };
@@ -178,24 +176,8 @@ describe("enrichSection：Twitter 推文直链", () => {
     if (result.kind !== "categories") {
       return;
     }
+    // 反查 handle → 推文直链的老路已删：同一作者多条推文时它必然对不上
     expect(result.categories[0]?.items[0]?.url).toBe("https://x.com/simonw/status/2113071390601458152");
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  it("原始数据里没有直链时保留主页", async () => {
-    const dir = await setup({ "twitter_raw.txt": "没有脚注区" });
-    const section: DigestSection = {
-      key: "twitter",
-      title: "Twitter",
-      kind: "categories",
-      categories: [{ title: "AI", titleZh: "", items: [{ en: "1. @simonw said something.", zh: "", url: "https://x.com/simonw" }] }],
-    };
-
-    const result = await enrichSection(section, { runsDir, date: "2026-10-23" });
-    if (result.kind !== "categories") {
-      return;
-    }
-    expect(result.categories[0]?.items[0]?.url).toBe("https://x.com/simonw");
     await rm(dir, { recursive: true, force: true });
   });
 });

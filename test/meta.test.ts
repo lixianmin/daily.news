@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { extractHnMeta, extractTwitterLinks, parseGithubMeta } from "../src/meta.ts";
+import { extractHnMeta, parseGithubMeta } from "../src/meta.ts";
 
 describe("parseGithubMeta", () => {
   it("从 GitHub Trending 行解析星数、语言、今日增量", () => {
@@ -36,63 +36,5 @@ describe("extractHnMeta", () => {
 
   it("解析不到时返回 null", () => {
     expect(extractHnMeta("- **Some Title** — no meta")).toBeNull();
-  });
-});
-
-describe("extractTwitterLinks", () => {
-  const raw = [
-    "**lidang 立党 [1]** @lidangzzz [1]·Oct 22 [2]",
-    "这是正文第一段。",
-    "37 Replies 8 reposts 287 Likes 58111 views [3]",
-    "---",
-    "**宝玉 [4]** @dotey [4]·10h [5]",
-    "我猜测 Tibo 搞这个活动。",
-    "---",
-    "[1] https://x.com/lidangzzz",
-    "[2] https://x.com/lidangzzz/status/2113071390601458152",
-    "[3] https://x.com/lidangzzz/status/2113071390601458152/analytics",
-    "[4] https://x.com/dotey",
-    "[5] https://x.com/dotey/status/2113299677785542772",
-  ].join("\n");
-
-  it("把 handle 映射到推文直链（不是主页）", () => {
-    const links = extractTwitterLinks(raw);
-    expect(links.get("lidangzzz")).toBe("https://x.com/lidangzzz/status/2113071390601458152");
-    expect(links.get("dotey")).toBe("https://x.com/dotey/status/2113299677785542772");
-  });
-
-  it("analytics 链接被忽略", () => {
-    const links = extractTwitterLinks(raw);
-    for (const url of links.values()) {
-      expect(url).not.toContain("/analytics");
-    }
-  });
-
-  it("同一 handle 多次出现时取第一条推文", () => {
-    const multi = [
-      "**A [1]** @user [1]·1h [2]",
-      "正文",
-      "[1] https://x.com/user",
-      "[2] https://x.com/user/status/111",
-      "[3] https://x.com/user/status/222",
-    ].join("\n");
-    const links = extractTwitterLinks(multi);
-    expect(links.get("user")).toBe("https://x.com/user/status/111");
-  });
-
-  it("图片等非 status 的脚注不被当推文链接", () => {
-    const withImage = [
-      "**A [1]** @user [1]·1h [2]",
-      "正文",
-      "[1] https://x.com/user",
-      "[2] https://x.com/user/status/111",
-      "[3] https://pbs.twimg.com/media/xxx.jpg",
-    ].join("\n");
-    const links = extractTwitterLinks(withImage);
-    expect(links.get("user")).toBe("https://x.com/user/status/111");
-  });
-
-  it("空内容返回空 map", () => {
-    expect(extractTwitterLinks("").size).toBe(0);
   });
 });

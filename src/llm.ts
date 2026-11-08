@@ -1,15 +1,9 @@
-import type {
-  CategoryItem,
-  DigestCategory,
-  DigestItem,
-  DigestSection,
-  SourceKey,
-} from "./types.ts";
+import type { DigestItem, DigestSection, SourceKey } from "./types.ts";
 import { SOURCE_TITLES } from "./types.ts";
 
 /** 一次解析的结果。失败带原因，供日志与重试判定使用。 */
-export type ParseOutcome =
-  | { ok: true; section: DigestSection }
+export type ParseOutcome<T> =
+  | { ok: true; value: T }
   | { ok: false; error: string };
 
 /** 剥掉 markdown 代码围栏。模型常把 JSON 包在 ```json 里。 */
@@ -154,81 +148,13 @@ function asItems(value: unknown): DigestItem[] {
   return items;
 }
 
-/** Twitter 条目的链接：优先用显式 url，否则从 handles[0] 推作者主页。 */
-function categoryItemUrl(record: Record<string, unknown>): string | undefined {
-  const direct = normalizeUrl(record["url"]);
-  if (direct !== undefined) {
-    return direct;
-  }
-
-  const handles = record["handles"];
-  if (!Array.isArray(handles)) {
-    return undefined;
-  }
-  for (const handle of handles) {
-    if (typeof handle !== "string") {
-      continue;
-    }
-    const name = handle.trim().replace(/^@/, "");
-    // X 的用户名限 15 字符、只含字母数字下划线
-    if (/^[A-Za-z0-9_]{1,15}$/.test(name)) {
-      return `https://x.com/${name}`;
-    }
-  }
-  return undefined;
-}
-
-function asCategoryItems(value: unknown): CategoryItem[] {
-  const items: CategoryItem[] = [];
-  for (const raw of pickArray(value, "items")) {
-    const record = asRecord(raw);
-    if (record === undefined) {
-      continue;
-    }
-    const en = trimmedString(record["en"]);
-    if (en === "") {
-      continue;
-    }
-
-    const item: CategoryItem = { en, zh: "" };
-    const url = categoryItemUrl(record);
-    if (url !== undefined) {
-      item.url = url;
-    }
-    items.push(item);
-  }
-  return items;
-}
-
-/** 空分类直接丢弃：模型有时会写一个只有标题没内容的分类。 */
-function asCategories(value: unknown): DigestCategory[] {
-  const categories: DigestCategory[] = [];
-  for (const raw of pickArray(value, "categories")) {
-    const record = asRecord(raw);
-    if (record === undefined) {
-      continue;
-    }
-    const title = trimmedString(record["title"]);
-    if (title === "") {
-      continue;
-    }
-
-    const items = asCategoryItems(record["items"]);
-    if (items.length === 0) {
-      continue;
-    }
-    categories.push({ title, titleZh: "", items });
-  }
-  return categories;
-}
-
 /**
  * 把模型输出解析成一个章节。
  *
  * 章节标题一律由 `SOURCE_TITLES` 决定，不采信模型给的 title——它偶尔会把
  * 标题改写成中英混排或加装饰符号，那会让下游按标题匹配的逻辑失效。
  */
-export function parseSection(raw: string, key: SourceKey): ParseOutcome {
+export function parseSection(raw: string, key: SourceKey): ParseOutcome<DigestSection> {
   const text = raw.trim();
   if (text === "") {
     return { ok: false, error: "空响应" };
@@ -254,16 +180,118 @@ export function parseSection(raw: string, key: SourceKey): ParseOutcome {
   const title = SOURCE_TITLES[key];
 
   if (key === "twitter") {
-    const categories = asCategories(parsed);
-    if (categories.length === 0) {
-      return { ok: false, error: "没有有效分类" };
-    }
-    return { ok: true, section: { key, title, kind: "categories", categories } };
+    // Twitter 不再走模型：正文由翻译引擎直接翻，模型只分主题（见 parseTweetCategories）
+    return { ok: false, error: "Twitter 章节不走逐条解析" };
   }
 
   const items = asItems(parsed);
   if (items.length === 0) {
     return { ok: false, error: "没有有效条目" };
   }
-  return { ok: true, section: { key, title, kind: "items", items } };
+  return { ok: true, value: { key, title, kind: "items", items } };
+}
+
+/** 模型给的分类归属：一条推文归到哪个主题。 */
+export interface TweetCategory {
+  /** 英文分类标题。 */
+  title: string;
+  /** 该分类下的推文编号（对应分块里的 `<tweet id="N">`）。 */
+  tweetIds: number[];
+}
+
+/**
+ * 解析模型给的推文分类。
+ *
+ * 模型只回答「哪条推文属于哪个主题」，正文一个字都不写——
+ * 正文由翻译引擎直译，模型不碰。
+ */
+export function parseTweetCategories(raw: string): ParseOutcome<TweetCategory[]> {
+  const text = raw.trim();
+  if (text === "") {
+    return { ok: false, error: "空响应" };
+  }
+
+  if (looksLikeToolCall(text)) {
+    return {
+      ok: false,
+      error: "模型输出的是工具调用而不是 JSON（分块内容可能过长，模型被带跑）",
+    };
+  }
+
+  const balanced = extractBalanced(stripFence(text));
+  if (balanced === null) {
+    return { ok: false, error: "响应里找不到 JSON 对象或数组" };
+  }
+
+  const parsed = tryParse(balanced);
+  if (parsed === undefined) {
+    return { ok: false, error: "JSON 解析失败" };
+  }
+
+  const categories = asTweetCategories(parsed);
+  if (categories.length === 0) {
+    return { ok: false, error: "没有有效分类" };
+  }
+  return { ok: true, value: categories };
+}
+
+/** 逐个校验分类：标题非空、推文编号是正整数。空的分类丢掉。 */
+function asTweetCategories(value: unknown): TweetCategory[] {
+  const categories: TweetCategory[] = [];
+  for (const raw of pickArray(value, "categories")) {
+    const record = asRecord(raw);
+    if (record === undefined) {
+      continue;
+    }
+    const title = trimmedString(record["title"]);
+    if (title === "") {
+      continue;
+    }
+
+    const ids = record["tweetIds"];
+    if (!Array.isArray(ids)) {
+      continue;
+    }
+    const tweetIds: number[] = [];
+    for (const id of ids) {
+      if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
+        continue;
+      }
+      if (!tweetIds.includes(id)) {
+        tweetIds.push(id);
+      }
+    }
+    if (tweetIds.length === 0) {
+      continue;
+    }
+    categories.push({ title, tweetIds });
+  }
+  return categories;
+}
+
+/** 解析翻译结果：条数必须对得上，否则整批作废（宁可留空也不串行）。 */
+export function parseTranslations(raw: string, expected: number): ParseOutcome<string[]> {
+  const text = raw.trim();
+  if (text === "") {
+    return { ok: false, error: "空响应" };
+  }
+  const balanced = extractBalanced(stripFence(text));
+  if (balanced === null) {
+    return { ok: false, error: "响应里找不到 JSON 对象或数组" };
+  }
+  const parsed = tryParse(balanced);
+  if (parsed === undefined) {
+    return { ok: false, error: "JSON 解析失败" };
+  }
+
+  const list = Array.isArray(parsed)
+    ? parsed
+    : typeof parsed === "object" && parsed !== null && Array.isArray((parsed as Record<string, unknown>)["translations"])
+      ? ((parsed as Record<string, unknown>)["translations"] as unknown[])
+      : [];
+
+  if (list.length !== expected) {
+    return { ok: false, error: `条数不匹配：期望 ${expected}，实际 ${list.length}` };
+  }
+  return { ok: true, value: list.map((entry) => (typeof entry === "string" ? entry.trim() : "")) };
 }

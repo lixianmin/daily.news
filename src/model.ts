@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -10,7 +10,14 @@ import {
   promptFile,
 } from "./config.ts";
 import { logger } from "./logo.ts";
-import { parseSection } from "./llm.ts";
+import {
+  parseSection,
+  parseTranslations,
+  parseTweetCategories,
+  type ParseOutcome,
+  type TweetCategory,
+} from "./llm.ts";
+import type { TargetLang } from "./translate.ts";
 import type { DigestSection, SourceKey } from "./types.ts";
 
 /** 单次模型调用的超时。deepseek 生成 20 条摘要通常 20~60s，给 3 倍余量。 */
@@ -41,9 +48,24 @@ const SYSTEM_PROMPT = [
   "Output starts with { and ends with }.",
 ].join(" ");
 
+/**
+ * 翻译用的 system prompt。
+ *
+ * 与摘要那套完全分开：这里**只许逐字翻译**，不许总结、不许合并句子、
+ * 不许删减。免费翻译端点挂了才走这条（额度有限，宁可慢也不能走样）。
+ */
+const TRANSLATE_SYSTEM_PROMPT = [
+  "You are a translator.",
+  "You translate each input string faithfully and completely into the requested language.",
+  "You never summarize, never shorten, never merge or split items, never add commentary.",
+  "Preserve line breaks and paragraph structure of each item.",
+  "You output ONLY one valid JSON object matching the schema in the user message.",
+  "You never call tools, never read files, never explain, never use markdown fences.",
+].join(" ");
+
 /** 每次调用传给模型的指令后缀，说明本次是哪类章节。 */
 const SCHEMA_HINT: Record<SourceKey, string> = {
-  twitter: "本次是 Twitter 時間線章节，按【分类章节】的 schema 输出 JSON（categories）。",
+  twitter: "本次是 Twitter 時間線章节，按【Twitter 分类】的 schema 输出 JSON（categories[].tweetIds）。只分主题，不写正文。",
   github: "本次是 GitHub Trending 章节，按【逐条章节】的 schema 输出 JSON（items）。",
   hackernews: "本次是 Hacker News 章节，按【逐条章节】的 schema 输出 JSON（items）。",
   zhihu: "本次是 知乎熱榜 章节，按【逐条章节】的 schema 输出 JSON（items）。",
@@ -100,6 +122,10 @@ interface PiCall {
   chunkPath: string;
   instruction: string;
   timeoutMs?: number;
+  /** 覆盖 pi 的 system prompt。省略用摘要编辑那套。 */
+  systemPrompt?: string;
+  /** 是否把 prompts/format.md 一起喂过去。翻译不需要它。 */
+  includeFormat?: boolean;
 }
 
 interface PiResult {
@@ -116,13 +142,13 @@ async function callPi(call: PiCall): Promise<PiResult> {
     "--no-session",
     // 用专用 prompt 覆盖 pi 默认的 coding agent prompt
     "--system-prompt",
-    SYSTEM_PROMPT,
+    call.systemPrompt ?? SYSTEM_PROMPT,
     "--provider",
     call.provider,
     "--model",
     call.model,
     "-p",
-    `@${promptFile()}`,
+    ...(call.includeFormat === false ? [] : [`@${promptFile()}`]),
     `@${call.chunkPath}`,
     call.instruction,
   ];
@@ -167,8 +193,20 @@ export interface GenerateOptions {
   chunkPath: string;
 }
 
+/** 一次双通道调用的结果。 */
+interface ChannelOutcome<T> {
+  ok: boolean;
+  value?: T;
+  /** 实际产出结果的模型标识。 */
+  model?: string;
+  /** 全部尝试失败时的最后错误。 */
+  error?: string;
+  /** 尝试次数，用于日志。 */
+  attempts: number;
+}
+
 /**
- * 生成一个章节。
+ * 走双通道（主 + 兜底）调一次模型并解析。
  *
  * 两条通道：主通道 deepseek（key 来自 ~/.zshrc.sh），兜底 zai-coding-cn
  * （凭证在 ~/.pi/agent/auth.json）。两者是**不同的服务商与不同的 key**，
@@ -176,8 +214,22 @@ export interface GenerateOptions {
  *
  * 单块彻底失败不抛错——返回 ok:false，由上层的章节状态标记 ⚠️。
  */
-export async function generateSection(options: GenerateOptions): Promise<SectionOutcome> {
-  const instruction = SCHEMA_HINT[options.key];
+async function callChannels<T>(options: {
+  /** 来源标识，只进日志。 */
+  source: string;
+  chunkPath: string;
+  instruction: string;
+  parse: (raw: string) => ParseOutcome<T>;
+  /** system prompt。省略用默认的「每日摘要编辑」那套。 */
+  systemPrompt?: string;
+  /** 是否把 prompts/format.md 一起喂过去。翻译不需要它。 */
+  includeFormat?: boolean;
+  /** 主通道尝试次数。翻译兜底只试一次，不必等三次退避。 */
+  primaryAttempts?: number;
+}): Promise<ChannelOutcome<T>> {
+  const instruction = options.instruction;
+  const systemPrompt = options.systemPrompt ?? SYSTEM_PROMPT;
+  const primaryAttempts = options.primaryAttempts ?? PRIMARY_ATTEMPTS;
   let attempts = 0;
   let lastError = "";
 
@@ -187,7 +239,7 @@ export async function generateSection(options: GenerateOptions): Promise<Section
     lastError = "找不到 DEEPSEEK_API_KEY（~/.zshrc.sh 中未找到），主通道跳过";
     logger.warn("primary channel skipped", { reason: lastError });
   } else {
-    for (let i = 1; i <= PRIMARY_ATTEMPTS; i += 1) {
+    for (let i = 1; i <= primaryAttempts; i += 1) {
       attempts += 1;
       const startedAt = Date.now();
       const result = await callPi({
@@ -196,24 +248,31 @@ export async function generateSection(options: GenerateOptions): Promise<Section
         env: { DEEPSEEK_API_KEY: apiKey },
         chunkPath: options.chunkPath,
         instruction,
+        systemPrompt: options.systemPrompt,
+        includeFormat: options.includeFormat,
       });
       const elapsedMs = Date.now() - startedAt;
 
       if (result.ok) {
-        const parsed = parseSection(result.text, options.key);
+        const parsed = options.parse(result.text);
         if (parsed.ok) {
           logger.info("section generated", {
-            source: options.key,
+            source: options.source,
             channel: `${PRIMARY_PROVIDER}/${PRIMARY_MODEL}`,
             attempt: i,
             elapsedMs,
             bytes: result.text.length,
           });
-          return { ok: true, section: parsed.section, model: `${PRIMARY_PROVIDER}/${PRIMARY_MODEL}`, attempts };
+          return {
+            ok: true,
+            value: parsed.value,
+            model: `${PRIMARY_PROVIDER}/${PRIMARY_MODEL}`,
+            attempts,
+          };
         }
         lastError = `解析失败: ${parsed.error}`;
         logger.warn("section parse failed", {
-          source: options.key,
+          source: options.source,
           channel: "primary",
           attempt: i,
           elapsedMs,
@@ -223,14 +282,14 @@ export async function generateSection(options: GenerateOptions): Promise<Section
       } else {
         lastError = result.error ?? "未知错误";
         logger.warn("primary call failed", {
-          source: options.key,
+          source: options.source,
           attempt: i,
           elapsedMs,
           error: lastError,
         });
       }
 
-      if (i < PRIMARY_ATTEMPTS) {
+      if (i < primaryAttempts) {
         await sleep(i * RETRY_BACKOFF_MS);
       }
     }
@@ -241,7 +300,7 @@ export async function generateSection(options: GenerateOptions): Promise<Section
     attempts += 1;
     const startedAt = Date.now();
     logger.info("falling back", {
-      source: options.key,
+      source: options.source,
       channel: `${FALLBACK_PROVIDER}/${FALLBACK_MODEL}`,
       attempt: j,
     });
@@ -252,36 +311,38 @@ export async function generateSection(options: GenerateOptions): Promise<Section
       env: null, // 走全局 auth.json
       chunkPath: options.chunkPath,
       instruction,
+      systemPrompt: options.systemPrompt,
+      includeFormat: options.includeFormat,
     });
     const elapsedMs = Date.now() - startedAt;
 
     if (result.ok) {
-      const parsed = parseSection(result.text, options.key);
+      const parsed = options.parse(result.text);
       if (parsed.ok) {
         logger.info("section generated (fallback)", {
-          source: options.key,
+          source: options.source,
           channel: `${FALLBACK_PROVIDER}/${FALLBACK_MODEL}`,
           attempt: j,
           elapsedMs,
         });
         return {
           ok: true,
-          section: parsed.section,
+          value: parsed.value,
           model: `${FALLBACK_PROVIDER}/${FALLBACK_MODEL}`,
           attempts,
         };
       }
       lastError = `解析失败: ${parsed.error}`;
       logger.warn("fallback parse failed", {
-        source: options.key,
+        source: options.source,
         attempt: j,
         elapsedMs,
-        error: parsed.error,
+        error: lastError,
         sample: result.text.slice(0, 200),
       });
     } else {
       lastError = result.error ?? "未知错误";
-      logger.warn("fallback call failed", { source: options.key, attempt: j, elapsedMs, error: lastError });
+      logger.warn("fallback call failed", { source: options.source, attempt: j, elapsedMs, error: lastError });
     }
 
     if (j < FALLBACK_ATTEMPTS) {
@@ -289,6 +350,107 @@ export async function generateSection(options: GenerateOptions): Promise<Section
     }
   }
 
-  logger.error("section generation failed", { source: options.key, attempts, error: lastError });
+  logger.error("section generation failed", { source: options.source, attempts, error: lastError });
   return { ok: false, error: lastError, attempts };
+}
+
+/**
+ * 生成一个章节（GitHub / Hacker News 走这条）。
+ */
+export async function generateSection(options: GenerateOptions): Promise<SectionOutcome> {
+  const outcome = await callChannels<DigestSection>({
+    source: options.key,
+    chunkPath: options.chunkPath,
+    instruction: SCHEMA_HINT[options.key],
+    parse: (raw) => parseSection(raw, options.key),
+  });
+
+  if (!outcome.ok || outcome.value === undefined) {
+    return { ok: false, error: outcome.error ?? "生成失败", attempts: outcome.attempts };
+  }
+  return {
+    ok: true,
+    section: outcome.value,
+    model: outcome.model,
+    attempts: outcome.attempts,
+  };
+}
+
+/** 推文分类的结果。 */
+export interface CategorizeOutcome {
+  ok: boolean;
+  /** 分类归属。失败为 undefined。 */
+  categories?: TweetCategory[];
+  /** 实际产出的模型标识。 */
+  model?: string;
+  /** 全部尝试失败时的最后错误。 */
+  error?: string;
+  /** 尝试次数。 */
+  attempts: number;
+}
+
+/**
+ * 给推文分主题。
+ *
+ * 模型只回答「哪条推文属于哪个主题」，不写正文——正文由翻译引擎直译。
+ * 失败不抛错，由调用方决定退化成单分类还是整源失败。
+ */
+export async function categorizeTweets(options: { chunkPath: string }): Promise<CategorizeOutcome> {
+  const outcome = await callChannels<TweetCategory[]>({
+    source: "twitter",
+    chunkPath: options.chunkPath,
+    instruction: SCHEMA_HINT.twitter,
+    parse: parseTweetCategories,
+  });
+
+  if (!outcome.ok || outcome.value === undefined) {
+    return { ok: false, error: outcome.error ?? "生成失败", attempts: outcome.attempts };
+  }
+  return { ok: true, categories: outcome.value, model: outcome.model, attempts: outcome.attempts };
+}
+
+/**
+ * 用模型兜底翻译一批文字。
+ *
+ * 只在免费翻译端点（Google / MyMemory）都拿不到结果时调用——它们没有配额契约，
+ * 随时可能 429。走模型是最后一道保险：宁可慢一点，也要让页面右侧有中文。
+ *
+ * 返回与入参等长的数组；失败返回 undefined（调用方把这一批留空）。
+ */
+export async function translateWithModel(options: {
+  texts: string[];
+  target: TargetLang;
+  /** 落盘输入文件的位置（runs 目录下）。 */
+  dir: string;
+}): Promise<string[] | undefined> {
+  if (options.texts.length === 0) {
+    return [];
+  }
+
+  const chunkPath = join(options.dir, `_translate_${options.target}.json`);
+  await writeFile(chunkPath, JSON.stringify(options.texts, null, 0), "utf8");
+
+  const langName = options.target === "en" ? "English" : "Traditional Chinese (Taiwan, 繁體中文)";
+  const instruction = [
+    `把输入文件里的每一条字符串翻译成 ${langName}。`,
+    "输入是 JSON 数组，输出必须是 {\"translations\": [...]}，条数与顺序完全一致。",
+    "逐字翻译，保留每条的换行；不要总结、不要改写、不要合并或拆分条目。",
+  ].join("");
+
+  const outcome = await callChannels<string[]>({
+    source: "translate",
+    chunkPath,
+    instruction,
+    systemPrompt: TRANSLATE_SYSTEM_PROMPT,
+    includeFormat: false,
+    // 兜底路径要快：端点都已经挂了，重试三次只会让整轮生成卡住
+    primaryAttempts: 1,
+    parse: (raw) => parseTranslations(raw, options.texts.length),
+  });
+
+  if (!outcome.ok || outcome.value === undefined) {
+    logger.warn("model translate failed", { target: options.target, error: outcome.error ?? "" });
+    return undefined;
+  }
+  return outcome.value;
 }

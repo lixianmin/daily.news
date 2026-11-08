@@ -198,12 +198,15 @@ a.card-title:hover{color:var(--accent)}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:0 28px;align-items:start}
 .duo > .en{padding-right:28px;border-right:1px solid var(--line-2)}
 .duo > .zh{padding-left:28px}
+/* 译文里的换行是原文的段落结构，要保留（推文是一行一句） */
+.duo > .en,.duo > .zh{white-space:pre-wrap}
 .duo > .zh:empty{display:none}
 .card-sum{color:var(--fg-2);font-size:14px;line-height:1.62}
 .card-sum .zh{color:var(--muted)}
-/* 夹行必须作用在直接包含文本的列上——挂在 grid 容器 (.card-sum) 上不生效 */
-.card-sum.clamp > .en,
-.card-sum.clamp > .zh{
+/* 夹行必须作用在直接包含文本的列上——挂在 grid 容器 (.duo) 上不生效。
+   列在 .duo 里面，所以要用后代选择器，不能用 > .en。 */
+.card-sum.clamp .en,
+.card-sum.clamp .zh{
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
 }
 /* 窄屏：两列堆叠，但保持英文在前 */
@@ -242,6 +245,8 @@ a.card-title:hover{color:var(--accent)}
 .cat-items li{padding:11px 0;border-bottom:1px solid var(--line-2)}
 .cat-items li:last-child{border-bottom:0}
 .cat-items .who{color:var(--accent);font-weight:550}
+.cat-items .who:hover{text-decoration:underline;text-underline-offset:3px}
+.cat-items .when{color:var(--faint);font-size:11.5px}
 .cat-items .cite{
   color:var(--muted);font-size:12px;text-decoration:underline;
   text-decoration-color:var(--line);text-underline-offset:3px;
@@ -251,7 +256,7 @@ a.card-title:hover{color:var(--accent)}
 .cat-items .duo > .en{color:var(--fg-2)}
 .cat-items .duo > .zh{color:var(--muted)}
 /* Twitter 要点的来源标签：与其它章节的卡片保持一致 */
-.cat-items .pt-top{margin-bottom:5px}
+.cat-items .pt-top{margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 /* ── 首页日期卡片 ────────────────────────────── */
 .day-list{display:grid;gap:8px}

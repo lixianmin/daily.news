@@ -21,8 +21,9 @@
       return;
     }
 
-    const card = button.closest(".card");
-    const summary = card?.querySelector(".card-sum");
+    // 卡片（GitHub / HN / 知乎）与 Twitter 的推文行都能展开
+    const container = button.closest(".card, .cat-item");
+    const summary = container?.querySelector(".card-sum");
     if (summary === null || summary === undefined) {
       return;
     }

@@ -2,14 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { needsTranslation, translateSection } from "../src/translate.ts";
 import type { DigestSection } from "../src/types.ts";
 
-/** 假翻译器：把英文包成 `【译】原文`，并记录调用次数。 */
+/** 假翻译器：把每一条包成 `【译】原文`，并记录调用（一次调用 = 一批）。 */
 function fakeTranslator() {
-  const calls: string[] = [];
+  const calls: string[][] = [];
   return {
     calls,
-    translator: async (text: string) => {
-      calls.push(text);
-      return `【译】${text}`;
+    translator: async (texts: string[]): Promise<string[]> => {
+      calls.push(texts);
+      return texts.map((text) => `【译】${text}`);
     },
   };
 }
@@ -43,7 +43,7 @@ describe("needsTranslation", () => {
 describe("translateSection：items", () => {
   it("逐条填充 zh", async () => {
     const fake = fakeTranslator();
-    const result = await translateSection(itemsSection, { translator: fake.translator, concurrency: 1 });
+    const result = await translateSection(itemsSection, { translator: fake.translator });
 
     expect(result.kind).toBe("items");
     if (result.kind !== "items") {
@@ -51,18 +51,19 @@ describe("translateSection：items", () => {
     }
     expect(result.items[0]?.zh).toBe("【译】A fast CLI for X.");
     expect(result.items[1]?.zh).toBe("【译】A Python library.");
-    expect(fake.calls).toHaveLength(2);
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0]).toHaveLength(2);
   });
 
   it("不改动原始对象（纯函数）", async () => {
     const fake = fakeTranslator();
-    await translateSection(itemsSection, { translator: fake.translator, concurrency: 1 });
+    await translateSection(itemsSection, { translator: fake.translator });
     expect(itemsSection.kind === "items" && itemsSection.items[0]?.zh).toBe("");
   });
 
   it("标题与链接不受影响", async () => {
     const fake = fakeTranslator();
-    const result = await translateSection(itemsSection, { translator: fake.translator, concurrency: 1 });
+    const result = await translateSection(itemsSection, { translator: fake.translator });
     if (result.kind !== "items") {
       return;
     }
@@ -81,7 +82,7 @@ describe("translateSection：items", () => {
         { title: "c/d", en: "Another thing.", zh: "" },
       ],
     };
-    const result = await translateSection(section, { translator: fake.translator, concurrency: 1 });
+    const result = await translateSection(section, { translator: fake.translator });
     if (result.kind !== "items") {
       return;
     }
@@ -110,7 +111,7 @@ describe("translateSection：categories", () => {
 
   it("分类标题与要点都翻译", async () => {
     const fake = fakeTranslator();
-    const result = await translateSection(categoriesSection, { translator: fake.translator, concurrency: 1 });
+    const result = await translateSection(categoriesSection, { translator: fake.translator });
 
     expect(result.kind).toBe("categories");
     if (result.kind !== "categories") {
@@ -119,29 +120,58 @@ describe("translateSection：categories", () => {
     const category = result.categories[0]!;
     expect(category.titleZh).toBe("【译】AI Models & Benchmarks");
     expect(category.items[0]?.zh).toBe("【译】@simonw benchmarked Qwen.");
-    expect(fake.calls).toHaveLength(3); // 1 标题 + 2 要点
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0]).toHaveLength(3); // 1 标题 + 2 要点
   });
 
   it("英文分类标题原文保留（分类靠 title 排序与展示）", async () => {
     const fake = fakeTranslator();
-    const result = await translateSection(categoriesSection, { translator: fake.translator, concurrency: 1 });
+    const result = await translateSection(categoriesSection, { translator: fake.translator });
     if (result.kind !== "categories") {
       return;
     }
     expect(result.categories[0]?.title).toBe("AI Models & Benchmarks");
+  });
+
+  it("保留 handle 与 time（渲染行首链接要用，重建对象时漏掉就没了）", async () => {
+    const section: DigestSection = {
+      key: "twitter",
+      title: "Twitter 時間線",
+      kind: "categories",
+      categories: [
+        {
+          title: "AI",
+          titleZh: "AI",
+          items: [
+            {
+              en: "The whole internet was dumbfounded.",
+              zh: "全網都看傻了。",
+              url: "https://x.com/foo/status/1",
+              handle: "@foo",
+              time: "18h",
+            },
+          ],
+        },
+      ],
+    };
+
+    const fake = fakeTranslator();
+    const result = await translateSection(section, { translator: fake.translator });
+    if (result.kind !== "categories") {
+      return;
+    }
+    const item = result.categories[0]?.items[0];
+    expect(item?.handle).toBe("@foo");
+    expect(item?.time).toBe("18h");
+    expect(item?.url).toBe("https://x.com/foo/status/1");
   });
 });
 
 describe("translateSection：失败容错", () => {
   it("单条翻译失败时 zh 留空，其余继续", async () => {
     const result = await translateSection(itemsSection, {
-      translator: async (text) => {
-        if (text.includes("Python")) {
-          throw new Error("quota exceeded");
-        }
-        return `【译】${text}`;
-      },
-      concurrency: 1,
+      translator: async (texts) =>
+        texts.map((text) => (text.includes("Python") ? "" : `【译】${text}`)),
     });
 
     if (result.kind !== "items") {
@@ -153,8 +183,7 @@ describe("translateSection：失败容错", () => {
 
   it("翻译器返回空白视为失败，zh 留空", async () => {
     const result = await translateSection(itemsSection, {
-      translator: async () => "   ",
-      concurrency: 1,
+      translator: async (texts) => texts.map(() => "   "),
     });
     if (result.kind !== "items") {
       return;
@@ -164,10 +193,7 @@ describe("translateSection：失败容错", () => {
 
   it("全部失败也不抛", async () => {
     const result = await translateSection(itemsSection, {
-      translator: async () => {
-        throw new Error("network down");
-      },
-      concurrency: 1,
+      translator: async (texts) => texts.map(() => ""),
     });
     if (result.kind !== "items") {
       return;
@@ -176,23 +202,21 @@ describe("translateSection：失败容错", () => {
   });
 });
 
-describe("translateSection：进度与并发", () => {
-  it("onProgress 报告已完成条数", async () => {
-    const seen: number[] = [];
+describe("translateSection：进度", () => {
+  it("onProgress 报告已完成条数（整批一次）", async () => {
+    const seen: Array<[number, number]> = [];
     await translateSection(itemsSection, {
-      translator: async (text) => `【译】${text}`,
-      concurrency: 1,
+      translator: async (texts) => texts.map((text) => `【译】${text}`),
       onProgress: (done, total) => {
-        seen.push(done);
-        expect(total).toBe(2);
+        seen.push([done, total]);
       },
     });
-    expect(seen).toEqual([1, 2]);
+    expect(seen).toEqual([[2, 2]]);
   });
 
-  it("并发数 > 1 时全部条目仍被翻译", async () => {
+  it("一批之内全部条目都被翻译", async () => {
     const fake = fakeTranslator();
-    const result = await translateSection(itemsSection, { translator: fake.translator, concurrency: 4 });
+    const result = await translateSection(itemsSection, { translator: fake.translator });
     if (result.kind !== "items") {
       return;
     }

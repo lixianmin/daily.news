@@ -1,4 +1,6 @@
 import type {
+  CategoryItem,
+  DigestCategory,
   DigestDay,
   DigestIndex,
   DigestItem,
@@ -318,37 +320,8 @@ function renderItemCard(item: DigestItem, source: SourceKey): string {
 }
 
 /** Twitter 分类块。 */
-function renderCategory(category: {
-  title: string;
-  titleZh: string;
-  items: Array<{ en: string; zh: string; url?: string }>;
-}): string {
-  const items = category.items
-    .map((item) => {
-      const url = safeUrl(item.url);
-      // 要点正文里带 @handle，把 handle 变成链接。
-      // 顺序要紧：先逐段转义并替换 handle，最后才拼 HTML——
-      // 先整体转义再插标签的话，标签本身会被转义掉。
-      const text = escapeHtml(item.en)
-        .split(/(@[A-Za-z0-9_]{1,15})/g)
-        .map((part) => {
-          if (!part.startsWith("@")) {
-            return part;
-          }
-          if (url === undefined) {
-            return part;
-          }
-          return `<a class="cite" href="${url}" target="_blank" rel="noopener noreferrer">${part}</a>`;
-        })
-        .join("");
-      // 每条要点都标来源——Twitter 用的是分类列表，不走 renderItemCard，
-      // 不标的话就跟 GitHub/HN/知乎 的卡片不一致，扫的时候不知道这条从哪来
-      return `<li>
-      <div class="pt-top">${renderSourceTag("twitter")}</div>
-      ${renderDuo(text, item.zh, "pt")}
-    </li>`;
-    })
-    .join("\n");
+function renderCategory(category: DigestCategory): string {
+  const items = category.items.map((item) => renderTweetItem(item)).join("\n");
 
   const titleZh =
     category.titleZh === "" ? "" : ` <span class="tz">${escapeHtml(category.titleZh)}</span>`;
@@ -359,6 +332,37 @@ function renderCategory(category: {
     ${items}
   </ul>
 </div>`;
+}
+
+/**
+ * 一条推文。
+ *
+ * 行首是作者 handle——**链到那条推文本身**，不是作者主页。
+ * 正文是原文的翻译：左英右繁，默认夹三行，点「More」展开全文。
+ */
+function renderTweetItem(item: CategoryItem): string {
+  const url = safeUrl(item.url);
+  const handle = item.handle === undefined ? "" : escapeHtml(item.handle);
+  const who =
+    handle === ""
+      ? ""
+      : url === undefined
+        ? `<span class="who">${handle}</span>`
+        : `<a class="who" href="${url}" target="_blank" rel="noopener noreferrer">${handle}</a>`;
+  const when = item.time === undefined || item.time === "" ? "" : `<span class="when">${escapeHtml(item.time)}</span>`;
+
+  // 摘要默认夹三行，点「More」展开
+  const needsExpand = item.en.length > 150;
+
+  return `<li class="cat-item">
+  <div class="pt-top">${renderSourceTag("twitter")} ${who} ${when}</div>
+  <div class="card-sum${needsExpand ? " clamp" : ""}">${renderDuo(escapeHtml(item.en), item.zh, "pt")}</div>
+  <div class="card-foot">
+    ${renderOriginalLink(item.url)}
+    <span class="spacer"></span>
+    ${needsExpand ? '<button class="expand-btn" type="button">More ▾</button>' : ""}
+  </div>
+</li>`;
 }
 
 /** 一个章节。 */

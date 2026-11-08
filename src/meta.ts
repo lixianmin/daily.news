@@ -78,39 +78,3 @@ export function extractHnMeta(line: string): HnMeta | null {
   }
   return { points, comments };
 }
-
-/**
- * 从 twitter_raw.txt 还原 handle → 推文直链的映射。
- *
- * 文件结构：正文块里带 `[N]` 脚注标记（如 `·Oct 22 [2]`），文件尾部是
- * 脚注区 `[N] https://x.com/<handle>/status/<id>`。其中 `[1]` 通常是作者
- * 主页、`[2]` 才是那条推文。
- *
- * 做法：扫脚注区，只收 status 直链（跳过主页与 /analytics），按 handle
- * 归并；同一 handle 多条推文时取第一条（正文里先出现的通常是主推）。
- */
-export function extractTwitterLinks(raw: string): Map<string, string> {
-  const links = new Map<string, string>();
-  if (raw === "") {
-    return links;
-  }
-
-  // 脚注行：`[12] https://x.com/foo/status/123`
-  const footnote = /^\[(\d+)\]\s+(\S+)\s*$/gm;
-  for (const match of raw.matchAll(footnote)) {
-    const url = match[2] ?? "";
-    if (!/^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/.test(url)) {
-      continue;
-    }
-    const handle = /\/x\.com\/([A-Za-z0-9_]+)\/status\//.exec(url)?.[1];
-    if (handle === undefined) {
-      continue;
-    }
-    // 先出现的优先
-    if (!links.has(handle)) {
-      links.set(handle, url);
-    }
-  }
-
-  return links;
-}

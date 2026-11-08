@@ -72,12 +72,16 @@ export interface DigestItem {
  * 不继承 `DigestItem`：要点没有独立标题，正文即 `en`，标题由分类提供。
  */
 export interface CategoryItem {
-  /** 英文要点，可多行段落。 */
+  /** 英文译文。原文是英文时就是原文。 */
   en: string;
   /** 繁體中文，机翻生成。与 en 内容一致。 */
   zh: string;
   /** 推文直链（从原始数据还原，不是作者主页）。 */
   url?: string;
+  /** 作者 handle（含 @）。渲染成行首的链接，指向该推文。 */
+  handle?: string;
+  /** 相对时间，如 "18h"。 */
+  time?: string;
 }
 
 /** Twitter 章節的主題分類。 */
