@@ -1,4 +1,11 @@
 {
+  "maxWorkers": 3,
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "thinking": "high",
+  "roles": {
+    "worker": { "model": "opencode-go/deepseek-v4.1-flash", "thinking": "high" },
+    "reviewer": { "model": "opencode-go/deepseek-v4.1-flash", "thinking": "high" }
+  },
   "foreman": { "project": "p-8gb4g2d4" },
   "contract": {
     "gates": "bun test",
