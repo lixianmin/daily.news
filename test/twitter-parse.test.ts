@@ -152,3 +152,49 @@ describe("parseTwitterRaw：推文外链", () => {
     expect(parseTwitterRaw(raw)[0]?.articleUrls ?? []).toEqual([]);
   });
 });
+
+describe("parseTwitterRaw：外链只留站外文章", () => {
+  /** 首行引用组里挂着一串 X 自家的链接 + 一条 t.co。 */
+  const raw = [
+    "**AGoldBull** @AGoldBull [1]·18h [2] [3,4,5,6]",
+    "正文",
+    "",
+    "[1] https://x.com/AGoldBull",
+    "[2] https://x.com/AGoldBull/status/1",
+    "[3] https://x.com/hashtag/AI?src=hashtag_click",
+    "[4] https://x.com/dotey",
+    "[5] https://x.com/dotey/status/999",
+    "[6] https://t.co/abc",
+  ].join("\n");
+
+  it("hashtag / @mention / 引用推文的链接被丢掉，t.co 外链保留", () => {
+    expect(parseTwitterRaw(raw)[0]?.articleUrls).toEqual(["https://t.co/abc"]);
+  });
+
+  it("www.x.com / mobile.twitter.com 这类变体也算 X 自家", () => {
+    const variants = [
+      "**A** @a [1]·1h [2] [3,4,5]",
+      "正文",
+      "",
+      "[1] https://x.com/a",
+      "[2] https://x.com/a/status/1",
+      "[3] https://www.x.com/a",
+      "[4] https://mobile.twitter.com/a/status/2",
+      "[5] https://example.com/post",
+    ].join("\n");
+    expect(parseTwitterRaw(variants)[0]?.articleUrls).toEqual(["https://example.com/post"]);
+  });
+
+  it("正式外链（t.co / 直接域名）保留", () => {
+    const raw = [
+      "**A** @a [1]·1h [2] [3,4]",
+      "正文",
+      "",
+      "[1] https://x.com/a",
+      "[2] https://x.com/a/status/1",
+      "[3] https://t.co/abc",
+      "[4] https://example.com/2026/11/post",
+    ].join("\n");
+    expect(parseTwitterRaw(raw)[0]?.articleUrls).toEqual(["https://t.co/abc", "https://example.com/2026/11/post"]);
+  });
+});

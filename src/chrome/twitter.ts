@@ -294,6 +294,26 @@ const METRICS_PATTERN = /^\d+\s+(Replies|reposts|Likes|views)\b/;
 /** status 直链。 */
 const STATUS_URL_PATTERN = /^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/;
 
+/**
+ * 这条链接是站外文章吗。
+ *
+ * 正文里的 `a[href]` 不只有文章：hashtag（`x.com/hashtag/…`）、@mention（`x.com/<handle>`）、
+ * 引用另一条推文（`x.com/<handle>/status/…`）都长那样。把 X 自家域名当文章抓要么白等一轮，
+ * 要么把一串导航/推荐拼进正文。真正的站外链接在 X 上就是 `t.co` 短链，过滤不会误伤。
+ */
+function isArticleUrl(link: string): boolean {
+  if (!/^https?:\/\//i.test(link)) {
+    return false;
+  }
+  try {
+    // 按 hostname 判，不靠字符串 includes（`www.x.com` / `mobile.twitter.com` 都是 X 自家）
+    const host = new URL(link).hostname.toLowerCase().replace(/^(?:www|mobile|m)\./, "");
+    return host !== "x.com" && host !== "twitter.com";
+  } catch {
+    return false;
+  }
+}
+
 /** 解析一个正文块。解析不出来返回 undefined（这一条丢掉）。 */
 function parseTweetBlock(
   block: string[],
@@ -338,7 +358,7 @@ function parseTweetBlock(
   const articleUrls = (head[6] ?? "")
     .split(",")
     .map((no) => notes.get(no.trim()))
-    .filter((link): link is string => link !== undefined && /^https?:\/\//i.test(link));
+    .filter((link): link is string => link !== undefined && isArticleUrl(link));
   if (articleUrls.length > 0) {
     tweet.articleUrls = articleUrls;
   }

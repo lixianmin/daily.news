@@ -208,7 +208,7 @@ export async function buildTwitterSection(options: {
   translator: Translator;
   /** 给推文分主题。失败时返回 undefined。 */
   categorize: () => Promise<TweetCategory[] | undefined>;
-  /** 搯外链文章的实现。默认走 `fetchArticleText`，测试可注入替身。 */
+  /** 抓外链文章的实现。默认走 `fetchArticleText`，测试可注入替身。 */
   expand?: ExpandDeps;
 }): Promise<DigestSection> {
   const { tweets, translator } = options;
