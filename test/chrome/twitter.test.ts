@@ -28,6 +28,7 @@ const SAMPLE: Tweet[] = [
     handle: "@ivanfioravanti",
     time: "2026-11-03T18:35:00.000Z",
     text: "DeepSeek Harness is just amazing",
+    links: null,
     url: "https://x.com/ivanfioravanti/status/2117687000681607545",
     replies: 34,
     reposts: 12,
@@ -39,6 +40,7 @@ const SAMPLE: Tweet[] = [
     handle: "@fankaishuoai",
     time: "2026-11-03T03:07:30.000Z",
     text: "我在反思，总是在追求最强 Agent",
+    links: null,
     url: "https://x.com/fankaishuoai/status/2117453587286839791",
     replies: 17,
     reposts: 6,
@@ -213,5 +215,13 @@ describe("fetchTwitterRaw", () => {
     const result = await fetchTwitterRaw({ dataDir, date: "2026-11-04", bridge });
     expect(result.ok).toBe(false);
     expect(result.error).toContain("Chrome 没有返回标签页 id");
+  });
+});
+
+describe("EXTRACT_TWEETS_EXPRESSION", () => {
+  it("只取正文里的链接（tweetText 内的 a[href]），不取头像与互动按钮", async () => {
+    const { EXTRACT_TWEETS_EXPRESSION } = await import("../../src/chrome/twitter.ts");
+    expect(EXTRACT_TWEETS_EXPRESSION).toContain('div[data-testid="tweetText"] a[href]');
+    expect(EXTRACT_TWEETS_EXPRESSION).toContain("links");
   });
 });

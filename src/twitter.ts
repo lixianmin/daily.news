@@ -15,6 +15,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RawTweet } from "./chrome/twitter.ts";
 import { parseTwitterRaw } from "./chrome/twitter.ts";
+import { fetchArticleText, type ArticleOutcome } from "./article.ts";
 import { logger } from "./logo.ts";
 import type { TweetCategory } from "./llm.ts";
 import { categorizeTweets } from "./model.ts";
@@ -22,8 +23,19 @@ import { toBilingual, type BilingualText, type Translator } from "./translate.ts
 import type { CategoryItem, DigestCategory, DigestSection } from "./types.ts";
 import { SOURCE_FILES, SOURCE_TITLES } from "./types.ts";
 
-/** 单条推文正文保留的长度。截断是为了控翻译成本，不是为了内容完整。 */
-export const TWEET_TEXT_LIMIT = 600;
+/**
+ * 给模型分主题时每条推文保留的预览长度。
+ *
+ * 这**不是成品正文的长度**：模型只看正文决定归到哪个主题，看 600 字足够；
+ * 进翻译与进成品的一律是全文（用户要求不截短）。
+ */
+export const CATEGORIZE_PREVIEW_CHARS = 600;
+
+/** 一条推文最多试几条外链：一条推文挂一串链接时不必全抓。 */
+const MAX_ARTICLE_LINKS = 3;
+
+/** 抓文章的并发数：目标站点不吃突发，也不让整章卡在抓取上。 */
+const EXPAND_CONCURRENCY = 3;
 
 /** 推文分块的字节上限。超过模型容易被带跑。 */
 export const TWITTER_CHUNK_BYTES = 20_000;
@@ -39,7 +51,7 @@ const FALLBACK_CATEGORY = "Timeline";
  */
 export function buildTwitterChunk(tweets: RawTweet[]): string {
   const blocks = tweets.map((tweet) => {
-    const text = tweet.text.slice(0, TWEET_TEXT_LIMIT);
+    const text = tweet.text.slice(0, CATEGORIZE_PREVIEW_CHARS);
     const attrs = [`id="${tweet.id}"`];
     if (tweet.handle !== "") {
       attrs.push(`handle="${tweet.handle}"`);
@@ -91,10 +103,71 @@ export function assignTweets(tweets: RawTweet[], categories: TweetCategory[] | u
   return assignments;
 }
 
+/** 抓文章正文的实现。默认走网络，测试可注入替身。 */
+export interface ExpandDeps {
+  fetchArticle?: (url: string) => Promise<ArticleOutcome>;
+  /** 并发数，默认 3。 */
+  concurrency?: number;
+  /** 每条推文最多试几条链接，默认 3。 */
+  maxLinks?: number;
+}
+
+/**
+ * 把推文外链的文章正文抓下来，拼在推文正文后面。
+ *
+ * - 正文 = `推文正文 + "\n\n" + 文章全文`：推文自己的话也是原文，不能丢；
+ * - 每条推文按顺序最多试 3 条链接，取第一条抓成功的；
+ * - 全部失败或没有外链：保持推文正文（抓不到就退回，不让整章失败）；
+ * - 并发 3，任一链接失败不影响其它推文，不抛错。
+ */
+export async function expandTweets(tweets: RawTweet[], deps: ExpandDeps = {}): Promise<RawTweet[]> {
+  const fetchArticle = deps.fetchArticle ?? fetchArticleText;
+  const maxLinks = deps.maxLinks ?? MAX_ARTICLE_LINKS;
+  const concurrency = Math.max(1, Math.min(deps.concurrency ?? EXPAND_CONCURRENCY, tweets.length));
+
+  const expanded: RawTweet[] = new Array<RawTweet>(tweets.length);
+  let cursor = 0;
+
+  // 游标共享的简单池：固定 concurrency 个 worker 领着做，不一次性把请求全发出去
+  const worker = async (): Promise<void> => {
+    while (cursor < tweets.length) {
+      const index = cursor;
+      cursor += 1;
+      expanded[index] = await expandOne(tweets[index]!, fetchArticle, maxLinks);
+    }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  return expanded;
+}
+
+/** 抓一条推文的外链文章。每条的结果打一条 info 日志。 */
+async function expandOne(
+  tweet: RawTweet,
+  fetchArticle: (url: string) => Promise<ArticleOutcome>,
+  maxLinks: number,
+): Promise<RawTweet> {
+  const urls = (tweet.articleUrls ?? []).slice(0, maxLinks);
+  if (urls.length === 0) {
+    return tweet;
+  }
+
+  for (const url of urls) {
+    const outcome = await fetchArticle(url);
+    if (outcome.ok) {
+      logger.info("tweet article expanded", { id: tweet.id, url, chars: outcome.text.length });
+      return { ...tweet, text: `${tweet.text}\n\n${outcome.text}` };
+    }
+  }
+
+  logger.info("tweet article skipped", { id: tweet.id, tried: urls.length, chars: tweet.text.length });
+  return tweet;
+}
+
 /**
  * 从当天的抓取产物构建 Twitter 章节。
  *
- * 读 `twitter_raw.txt` → 解析推文（带直链）→ 模型分主题 → 逐条直译。
+ * 读 `twitter_raw.txt` → 解析推文（带直链与外链）→ 模型分主题 → 展开外链文章 → 逐条直译。
  *
  * 模型分主题失败不致命：全部推文进兜底分类，正文照样是原文的翻译。
  */
@@ -135,12 +208,16 @@ export async function buildTwitterSection(options: {
   translator: Translator;
   /** 给推文分主题。失败时返回 undefined。 */
   categorize: () => Promise<TweetCategory[] | undefined>;
+  /** 搯外链文章的实现。默认走 `fetchArticleText`，测试可注入替身。 */
+  expand?: ExpandDeps;
 }): Promise<DigestSection> {
   const { tweets, translator } = options;
+  // 分主题看的是推文原文（不被外链文章淹没），之后才展开正文
   const categories = await options.categorize();
-  const assignments = assignTweets(tweets, categories);
+  const expanded = await expandTweets(tweets, options.expand ?? {});
+  const assignments = assignTweets(expanded, categories);
 
-  const translated = await translateTweets(tweets, translator);
+  const translated = await translateTweets(expanded, translator);
 
   const digestCategories: DigestCategory[] = assignments.map((assignment) => ({
     title: assignment.title,
@@ -156,12 +233,12 @@ export async function buildTwitterSection(options: {
   };
 }
 
-/** 逐条推文翻成中英两版（一次批量请求，条数与顺序不变）。 */
+/** 逐条推文翻成中英两版（一次批量请求，条数与顺序不变）。正文是全文，不截断。 */
 async function translateTweets(
   tweets: RawTweet[],
   translator: Translator,
 ): Promise<Map<number, BilingualText>> {
-  const texts = tweets.map((tweet) => tweet.text.slice(0, TWEET_TEXT_LIMIT));
+  const texts = tweets.map((tweet) => tweet.text);
   const translated = await toBilingual(texts, translator);
   return new Map(tweets.map((tweet, index) => [tweet.id, translated[index] ?? { en: "", zh: "" }]));
 }

@@ -174,11 +174,26 @@ const MYMEMORY_WARNING = /QUERY LENGTH LIMIT EXCEEDED|MYMEMORY WARNING|INVALID (
  *
  * 前两级逐条串行并留间隔：免费端点对突发并发敏感（实测一轮几十个并发请求就把
  * IP 打进 429）。整批失败才升到下一级，不逐条来回试。
+ *
+ * 三级都按 `splitForTranslation` 的 450 字段翻再拼：正文是全文后，单条可能上万字，
+ * 整条丢给模型会超上下文，然后整条丢译文。
  */
-export function createTranslator(options: { dir?: string } = {}): Translator {
-  // 模型兜底的输入文件落盘位置。落临时目录：它只是给 pi 读的中间产物，
+export interface TranslatorOptions {
+  /** 模型兜底的输入文件落盘位置。 */
+  dir?: string;
+  /** 模型兜底实现。默认 `translateWithModel`（pi），测试可注入替身。 */
+  modelTranslate?: (options: {
+    texts: string[];
+    target: TargetLang;
+    dir: string;
+  }) => Promise<string[] | undefined>;
+}
+
+export function createTranslator(options: TranslatorOptions = {}): Translator {
+  // 模型兜底的输入文件落临时目录：它只是给 pi 读的中间产物，
   // 跟数据目录（runs/<date>）无关，不该混进成品里。
   const workDir = options.dir ?? join(tmpdir(), "daily-news-translate");
+  const modelTranslate = options.modelTranslate ?? translateWithModel;
   let googleAlive = true;
   let googleFailures = 0;
 
@@ -202,16 +217,25 @@ export function createTranslator(options: { dir?: string } = {}): Translator {
       return results;
     }
 
-    // 逐条都没拿到 → 交给模型整批兜底
+    // 逐条都没拿到 → 交给模型兜底（按 450 字段，逐段翻再拼）
     await mkdir(workDir, { recursive: true });
-    const pending = failed.map((index) => texts[index] ?? "");
-    const fallback = await translateWithModel({ texts: pending, target, dir: workDir });
+    const pieces: { index: number; text: string }[] = [];
+    for (const index of failed) {
+      for (const piece of splitForTranslation(texts[index] ?? "")) {
+        pieces.push({ index, text: piece });
+      }
+    }
+    const fallback = await modelTranslate({ texts: pieces.map((piece) => piece.text), target, dir: workDir });
     if (fallback === undefined) {
       return results;
     }
-    failed.forEach((index, at) => {
-      results[index] = fallback[at] ?? "";
+    const rejoined = new Map<number, string>();
+    pieces.forEach((piece, at) => {
+      rejoined.set(piece.index, (rejoined.get(piece.index) ?? "") + (fallback[at] ?? ""));
     });
+    for (const index of failed) {
+      results[index] = rejoined.get(index) ?? "";
+    }
     return results;
   };
 

@@ -8,6 +8,7 @@ const tweets: Tweet[] = [
     handle: "@AGoldBull",
     time: "2026-11-08T01:00:00.000Z",
     text: "全网都看傻了。\n好莱坞编剧都不敢这么编的商战谍战大片。",
+    links: null,
     url: "https://x.com/AGoldBull/status/2118923901447327963",
     replies: 58,
     reposts: 39,
@@ -19,6 +20,7 @@ const tweets: Tweet[] = [
     handle: "@dotey",
     time: "2026-11-08T02:00:00.000Z",
     text: "我猜测 Tibo 搞这个活动。",
+    links: null,
     url: "https://x.com/dotey/status/2118992715488924001",
     replies: 12,
     reposts: 3,
@@ -91,5 +93,62 @@ describe("parseTwitterRaw", () => {
       "[2] https://x.com/nobody/status/1",
     ].join("\n");
     expect(parseTwitterRaw(raw)).toEqual([]);
+  });
+});
+
+describe("parseTwitterRaw：推文外链", () => {
+  /** 一条带两条外链的推文。 */
+  const withLinks: Tweet[] = [
+    {
+      ...tweets[0]!,
+      text: "这条值得读：https://t.co/abc",
+      links: ["https://t.co/abc", "https://t.co/def"],
+    },
+  ];
+
+  it("外链写进脚注区，首行带引用组", () => {
+    const raw = renderTwitterRaw(withLinks);
+    expect(raw).toContain("https://t.co/abc");
+    expect(raw).toContain("https://t.co/def");
+    expect(raw.split("\n")[0]).toMatch(/\[\d+,\d+\]$/);
+  });
+
+  it("render → parse 往返后 articleUrls 一致", () => {
+    const parsed = parseTwitterRaw(renderTwitterRaw(withLinks));
+    expect(parsed[0]?.articleUrls).toEqual(["https://t.co/abc", "https://t.co/def"]);
+  });
+
+  it("没有外链时不写引用组，解析出来为空", () => {
+    const raw = renderTwitterRaw(tweets);
+    expect(raw.split("\n")[0]).not.toMatch(/\[\d+,\d+\]$/);
+    expect(parseTwitterRaw(raw)[0]?.articleUrls ?? []).toEqual([]);
+  });
+
+  it("老格式（首行没有引用组）照样解析", () => {
+    const raw = [
+      "**AGoldBull** @AGoldBull [1]·18h [2]",
+      "全网都看傻了。",
+      "1 Replies 2 reposts 3 Likes 4 views",
+      "",
+      "[1] https://x.com/AGoldBull",
+      "[2] https://x.com/AGoldBull/status/1",
+    ].join("\n");
+    const parsed = parseTwitterRaw(raw);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.text).toBe("全网都看傻了。");
+    expect(parsed[0]?.url).toBe("https://x.com/AGoldBull/status/1");
+    expect(parsed[0]?.articleUrls ?? []).toEqual([]);
+  });
+
+  it("脚注里不是 http(s) 的链接被丢掉", () => {
+    const raw = [
+      "**AGoldBull** @AGoldBull [1]·18h [2] [3]",
+      "正文",
+      "",
+      "[1] https://x.com/AGoldBull",
+      "[2] https://x.com/AGoldBull/status/1",
+      "[3] javascript:alert(1)",
+    ].join("\n");
+    expect(parseTwitterRaw(raw)[0]?.articleUrls ?? []).toEqual([]);
   });
 });

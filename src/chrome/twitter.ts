@@ -22,6 +22,8 @@ export interface Tweet {
   time: string | null;
   /** 正文。 */
   text: string | null;
+  /** 正文里的外链（X 上是 `https://t.co/…`）。正文里没有链接就是 null。 */
+  links: string[] | null;
   /** 推文直链。 */
   url: string | null;
   replies: number | null;
@@ -63,6 +65,9 @@ export const EXTRACT_TWEETS_EXPRESSION = String.raw`(() => {
         handle: handle,
         time: timeEl ? timeEl.getAttribute('datetime') : null,
         text: textEl ? (textEl.textContent || '').trim() : null,
+        links: textEl
+          ? Array.from(a.querySelectorAll('div[data-testid="tweetText"] a[href]')).map((l) => l.href)
+          : null,
         url: linkEl ? linkEl.href : null,
         replies: pick(label, /([\d,]+) replies/i),
         reposts: pick(label, /([\d,]+) reposts/i),
@@ -212,6 +217,8 @@ export interface RawTweet {
   text: string;
   /** 推文直链。抓取没拿到时为空。 */
   url?: string;
+  /** 正文里的外链（文章地址）。没有外链时为空。 */
+  articleUrls?: string[];
 }
 
 /**
@@ -277,8 +284,9 @@ export function parseTwitterRaw(raw: string): RawTweet[] {
   return tweets;
 }
 
-/** 首行：`**作者** @handle [1]·18h [2]`。 */
-const HEAD_PATTERN = /^\*\*(.+?)\*\*\s*(?:(@[A-Za-z0-9_]+)\s*)?\[(\d+)\]·\s*([^\[]*)\[(\d+)\]/;
+/** 首行：`**作者** @handle [1]·18h [2]`，带外链时末尾还有引用组 ` [5,6]`。 */
+const HEAD_PATTERN =
+  /^\*\*(.+?)\*\*\s*(?:(@[A-Za-z0-9_]+)\s*)?\[(\d+)\]·\s*([^\[]*)\[(\d+)\](?:\s+\[([\d,]+)\])?/;
 
 /** 互动数行：`37 Replies 39 reposts 188 Likes 100048 views`。 */
 const METRICS_PATTERN = /^\d+\s+(Replies|reposts|Likes|views)\b/;
@@ -326,6 +334,14 @@ function parseTweetBlock(
   if (url !== undefined && STATUS_URL_PATTERN.test(url)) {
     tweet.url = url;
   }
+  // 外链引用组可选：老文件没有这一组，解析出来就是空
+  const articleUrls = (head[6] ?? "")
+    .split(",")
+    .map((no) => notes.get(no.trim()))
+    .filter((link): link is string => link !== undefined && /^https?:\/\//i.test(link));
+  if (articleUrls.length > 0) {
+    tweet.articleUrls = articleUrls;
+  }
   return tweet;
 }
 
@@ -348,17 +364,20 @@ function unescapeBodyLine(line: string): string {
  * 形状与原 dokobot 产物一致：
  *
  * ```
- * **作者名** @handle [1]·2h [2]
+ * **作者名** @handle [1]·2h [2] [5,6]
  * 正文
  * ---
  * 31 Replies 30 reposts 379 Likes 12289 views
  * ---
  * [1] https://x.com/handle
  * [2] https://x.com/handle/status/123
+ * [5] https://t.co/abc
+ * [6] https://t.co/def
  * ```
  *
- * 下游靠三件事切分：`parseTwitterRaw` 认 `**作者** @handle` 开头与「数字 + Replies/Likes」行，
- * 并从脚注区认 status 直链。
+ * 首行末尾的 `[5,6]` 是**可选**的：推文正文里有外链时才写（这些链接指向的文章正文
+ * 由 `expandTweets` 抓取）。下游靠三件事切分：`parseTwitterRaw` 认 `**作者** @handle`
+ * 开头与「数字 + Replies/Likes」行，并从脚注区认 status 直链与外链。
  */
 export function renderTwitterRaw(tweets: Tweet[], now: Date = new Date()): string {
   const blocks: string[] = [];
@@ -374,8 +393,17 @@ export function renderTwitterRaw(tweets: Tweet[], now: Date = new Date()): strin
     const idNote = noteNo;
     noteNo += 1;
     const urlNote = noteNo;
+    const linkNotes: { no: number; url: string }[] = [];
+    for (const link of tweet.links ?? []) {
+      if (!/^https?:\/\//i.test(link)) {
+        continue;
+      }
+      noteNo += 1;
+      linkNotes.push({ no: noteNo, url: link });
+    }
+    const linkGroup = linkNotes.length === 0 ? "" : ` [${linkNotes.map((note) => note.no).join(",")}]`;
 
-    const head = `**${name}** ${handle} [${idNote}]·${relativeTime(tweet.time, now)} [${urlNote}]`;
+    const head = `**${name}** ${handle} [${idNote}]·${relativeTime(tweet.time, now)} [${urlNote}]${linkGroup}`;
     const metrics = renderMetrics(tweet);
     blocks.push([head, ...body, ...(metrics === "" ? [] : [metrics])].join("\n"));
 
@@ -384,6 +412,9 @@ export function renderTwitterRaw(tweets: Tweet[], now: Date = new Date()): strin
     }
     if (tweet.url !== null && tweet.url !== "") {
       notes.push(`[${urlNote}] ${tweet.url}`);
+    }
+    for (const note of linkNotes) {
+      notes.push(`[${note.no}] ${note.url}`);
     }
   }
 
