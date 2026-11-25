@@ -1,0 +1,11 @@
+{
+  "foreman": { "project": "p-8gb4g2d4" },
+  "contract": {
+    "gates": "bun test",
+    "gatesFast": "bun test",
+    "specsDir": "docs/superpowers/specs",
+    "memoryPath": "docs/01.memory.md",
+    "versionBump": "none",
+    "features": { "mutation": false, "wiki": false }
+  }
+}
