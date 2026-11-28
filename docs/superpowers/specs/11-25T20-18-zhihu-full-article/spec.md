@@ -41,7 +41,7 @@ export type ZhihuAnswerOutcome =
 
 export function fetchZhihuAnswer(
   url: string,
-  options?: { bridge?: ChromeBridge; minChars?: number; waitMs?: number },
+  options?: { bridge?: ChromeBridge; minChars?: number; waitMs?: number; extensionWaitMs?: number },
 ): Promise<ZhihuAnswerOutcome>;
 ```
 
@@ -49,10 +49,12 @@ export function fetchZhihuAnswer(
   （后台标签页，`groupTitle: "daily.news"`）→ 等答案渲染 → 一次 `page.evaluate` 取值 →
   `finally` 里 `tab.close`（关不掉只记日志）。
 - 提取表达式要短（CDP `Runtime.evaluate` 有 5 秒硬超时）：
-  `document.querySelector('.List-item .RichText') ?? document.querySelector('.RichText')`，
+  **只认 `document.querySelector('.List-item .RichText')`，不写 `.RichText` 兜底**——问题描述
+  （`.QuestionRichText .RichText`）在 SSR 首屏就有，兜底会在答案未渲染时把问题描述当答案。
   取 `innerText.trim()`；**只取第一个答案**，不把所有答案拼起来（热榜条目只需要一个答案的正文，
   全部答案会到几万字，翻译成本与噪声都不值）。
-- 等渲染：每 1s 探一次表达式返回是否非空，上限 `waitMs`（默认 15s；登录墙不会自愈，等久了无意义）。
+- 等渲染：每 1s 探一次，返回长度 `>= max(minChars, excerpt.length + 1)` 才采纳，否则继续等到
+  `waitMs` 用尽（默认 15s；登录墙不会自愈，等久了无意义）。只判「非空」会让问题描述抢先命中。
 - 不抛错：桥连不上 / 超时 / 页面没内容 / 文本短于 `minChars`（默认 200）都返回 `{ok:false, reason}`。
   失败要记 warn 日志（带 url 与 reason），因为它同时是「这台机器没开 Chrome」的唯一可见线索。
 
@@ -87,7 +89,8 @@ export interface ExpandZhihuDeps {
 - 新增/扩展测试：
   - `chrome/zhihu`：假 bridge（记录 `tab.new` / `page.evaluate` / `tab.close`）→ 取到全文并关掉标签页；
     表达式返回空 → `{ok:false}`；`minChars` 以下 → `{ok:false}`；bridge 抛错 → `{ok:false}` 且不抛；
-    关标签页失败不影响返回值。
+    关标签页失败不影响返回值；**问题描述（非空但不足 `excerpt.length + 1`）不采纳，继续等到答案渲染**；
+    扩展未轮询时先有界等待（`extensionWaitMs`），等不到才失败且不发 `tab.new`。
   - `zhihu.ts`：`expandZhihu` 成功时 `fullText` 落上、正文用全文；抓取失败保留摘要片段；
     抓到的比摘要短 → 保留摘要片段；没有 `url` 的条目不调用抓取；
     `buildZhihuSection`（假翻译器 + 假抓取）出成品时英文列含全文、繁中列是它的译文。
