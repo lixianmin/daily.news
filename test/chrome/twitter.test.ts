@@ -2,7 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchTwitterRaw, fetchTwitterTimeline, renderTwitterRaw, type Tweet } from "../../src/chrome/twitter.ts";
+import {
+  EXPAND_SHOW_MORE_EXPRESSION,
+  fetchTwitterRaw,
+  fetchTwitterTimeline,
+  renderTwitterRaw,
+  type Tweet,
+} from "../../src/chrome/twitter.ts";
 import type { ChromeBridge } from "../../src/chrome/bridge.ts";
 
 /** 假桥：按动作名返回预设结果，并记录调用顺序。 */
@@ -51,6 +57,32 @@ const SAMPLE: Tweet[] = [
 
 const NOW = new Date("2026-11-04T03:00:00.000Z");
 
+/** 按内容认出是哪条表达式：滚动 / 展开 / 提取 / 等渲染。 */
+function expressionKind(expression: unknown): "scroll" | "expand" | "extract" | "count" {
+  const text = String(expression ?? "");
+  if (text === EXPAND_SHOW_MORE_EXPRESSION) {
+    return "expand";
+  }
+  if (text.includes("tweets:")) {
+    return "extract";
+  }
+  if (text.includes("scrollBy")) {
+    return "scroll";
+  }
+  return "count";
+}
+
+/** 把 sleep 换成记录器：测试里不要真的等 1.5s。 */
+function recordSleep(): { waits: number[]; sleep: (ms: number) => Promise<void> } {
+  const waits: number[] = [];
+  return {
+    waits,
+    sleep: async (ms: number) => {
+      waits.push(ms);
+    },
+  };
+}
+
 describe("renderTwitterRaw", () => {
   it("输出与 dokobot 同构的文本：推文块 + 指标行 + 脚注区", () => {
     const raw = renderTwitterRaw(SAMPLE, NOW);
@@ -95,14 +127,78 @@ describe("renderTwitterRaw", () => {
 });
 
 describe("fetchTwitterTimeline", () => {
-  it("开标签页 → 等推文渲染 → 滚动 → 提取 → 关标签页", async () => {
+  it("开标签页 → 等推文渲染 → 滚动 → 展开 → 提取 → 关标签页", async () => {
+    const order: string[] = [];
+    const { bridge, calls } = stubBridge((action, params) => {
+      if (action === "tab.new") {
+        order.push("tab.new");
+        return { tab: { id: 42 } };
+      }
+      if (action === "page.evaluate") {
+        const kind = expressionKind(params.expression);
+        order.push(kind);
+        if (kind === "extract") {
+          return { tweets: SAMPLE };
+        }
+        if (kind === "expand") {
+          return 1;
+        }
+        return 6;
+      }
+      if (action === "tab.close") {
+        order.push("tab.close");
+      }
+      return { ok: true };
+    });
+
+    const { waits, sleep } = recordSleep();
+    const tweets = await fetchTwitterTimeline({ bridge, scrolls: 2, minTweets: 2, waitMs: 1_000, sleep });
+    expect(tweets).toEqual(SAMPLE);
+    expect(order).toEqual(["tab.new", "count", "scroll", "scroll", "expand", "extract", "tab.close"]);
+    expect(calls[0]?.action).toBe("tab.new");
+    expect(calls.at(-1)?.action).toBe("tab.close");
+    expect(calls.at(-1)?.params).toEqual({ targetId: 42 });
+    // 展开过才等：1500ms 留给 X 重渲染
+    expect(waits).toEqual([1500]);
+  });
+
+  it("没有 Show more 时不等待，直接提取", async () => {
+    const { bridge } = stubBridge((action, params) => {
+      if (action === "tab.new") {
+        return { tab: { id: 42 } };
+      }
+      if (action === "page.evaluate") {
+        const kind = expressionKind(params.expression);
+        if (kind === "extract") {
+          return { tweets: SAMPLE };
+        }
+        if (kind === "expand") {
+          return 0;
+        }
+        return 6;
+      }
+      return { ok: true };
+    });
+
+    const { waits, sleep } = recordSleep();
+    const tweets = await fetchTwitterTimeline({ bridge, scrolls: 1, minTweets: 2, waitMs: 1_000, sleep });
+    expect(tweets).toEqual(SAMPLE);
+    expect(waits).toEqual([]);
+  });
+
+  it("展开抛错只记 warn，仍继续提取并返回推文", async () => {
+    let extracts = 0;
     const { bridge, calls } = stubBridge((action, params) => {
       if (action === "tab.new") {
         return { tab: { id: 42 } };
       }
       if (action === "page.evaluate") {
-        const expression = String(params.expression ?? "");
-        if (expression.includes("tweets:")) {
+        const kind = expressionKind(params.expression);
+        if (kind === "expand") {
+          throw new Error("expand boom");
+        }
+        if (kind === "extract") {
+          extracts += 1;
           return { tweets: SAMPLE };
         }
         return 6;
@@ -110,15 +206,12 @@ describe("fetchTwitterTimeline", () => {
       return { ok: true };
     });
 
-    const tweets = await fetchTwitterTimeline({ bridge, scrolls: 2, minTweets: 2, waitMs: 1_000 });
+    const { waits, sleep } = recordSleep();
+    const tweets = await fetchTwitterTimeline({ bridge, scrolls: 0, minTweets: 2, waitMs: 1_000, sleep });
     expect(tweets).toEqual(SAMPLE);
-    expect(calls[0]?.action).toBe("tab.new");
+    expect(extracts).toBe(1);
+    expect(waits).toEqual([]);
     expect(calls.at(-1)?.action).toBe("tab.close");
-    expect(calls.at(-1)?.params).toEqual({ targetId: 42 });
-    // 滚动两次 + 提取一次
-    const evaluates = calls.filter((call) => call.action === "page.evaluate");
-    expect(evaluates.filter((call) => String(call.params.expression).includes("tweets:"))).toHaveLength(1);
-    expect(evaluates.filter((call) => String(call.params.expression).includes("scrollBy"))).toHaveLength(2);
   });
 
   it("推文还没渲染出来时先等（X 首屏要几秒）", async () => {
@@ -128,9 +221,12 @@ describe("fetchTwitterTimeline", () => {
         return { tab: { id: 42 } };
       }
       if (action === "page.evaluate") {
-        const expression = String(params.expression ?? "");
-        if (expression.includes("tweets:")) {
+        const kind = expressionKind(params.expression);
+        if (kind === "extract") {
           return { tweets: SAMPLE };
+        }
+        if (kind === "expand") {
+          return 0;
         }
         polls += 1;
         return polls < 3 ? 0 : 6;
@@ -147,8 +243,8 @@ describe("fetchTwitterTimeline", () => {
       if (action === "tab.new") {
         return { tab: { id: 42 } };
       }
-      const expression = String(params.expression ?? "");
-      if (expression.includes("tweets:")) {
+      const kind = expressionKind(params.expression);
+      if (kind === "extract") {
         return { tweets: [] };
       }
       return 0;
@@ -162,9 +258,12 @@ describe("fetchTwitterTimeline", () => {
       if (action === "tab.new") {
         return { tab: { id: 42 } };
       }
-      const expression = String(params.expression ?? "");
-      if (expression.includes("tweets:")) {
+      const kind = expressionKind(params.expression);
+      if (kind === "extract") {
         throw new Error("boom");
+      }
+      if (kind === "expand") {
+        return 0;
       }
       return 6;
     });
@@ -182,9 +281,12 @@ describe("fetchTwitterRaw", () => {
         return { tab: { id: 42 } };
       }
       if (action === "page.evaluate") {
-        const expression = String(params.expression ?? "");
-        if (expression.includes("tweets:")) {
+        const kind = expressionKind(params.expression);
+        if (kind === "extract") {
           return { tweets: SAMPLE };
+        }
+        if (kind === "expand") {
+          return 0;
         }
         return 6;
       }
@@ -215,6 +317,29 @@ describe("fetchTwitterRaw", () => {
     const result = await fetchTwitterRaw({ dataDir, date: "2026-11-04", bridge });
     expect(result.ok).toBe(false);
     expect(result.error).toContain("Chrome 没有返回标签页 id");
+  });
+});
+
+/**
+ * 还原 `String.raw` 里的 `\uXXXX`。
+ *
+ * bun 会把 raw 模板里的非 ASCII 字符写成 `\uXXXX`（浏览器侧仍然是同一个字符）；
+ * 断言表达式里的中文文案前先还原，免得测试绑在 bun 的序列化细节上。
+ */
+function decodeUnicodeEscapes(text: string): string {
+  return text.replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+}
+
+describe("EXPAND_SHOW_MORE_EXPRESSION", () => {
+  it("在 tweetText 的父节点里按文案找 button[role=button] 并点击", () => {
+    const expression = decodeUnicodeEscapes(EXPAND_SHOW_MORE_EXPRESSION);
+    expect(expression).toContain('div[data-testid="tweetText"]');
+    expect(expression).toContain("parentElement");
+    expect(expression).toContain('button[role="button"]');
+    expect(expression).toContain("Show more");
+    expect(expression).toContain("显示更多");
+    expect(expression).toContain("顯示更多");
+    expect(expression).toContain(".click()");
   });
 });
 

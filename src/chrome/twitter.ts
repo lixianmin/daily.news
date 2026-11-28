@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { ChromeBridge } from "./bridge.ts";
 import { MIN_EXTENSION_VERSION } from "./protocol.ts";
+import { logger } from "../logo.ts";
 
 /**
  * 用 pi-chrome 抓 Twitter（X）时间线。
@@ -97,6 +98,44 @@ export const SCROLL_EXPRESSION = String.raw`(async () => {
   return document.querySelectorAll('article[data-testid="tweet"]').length;
 })()`;
 
+/**
+ * 展开被时间线截断的长推文。
+ *
+ * X 的时间线/个人页把长推文截到 ~280 字，截断按钮是 `tweetText` 父节点里的
+ * `<button role="button">Show more</button>`；点它之后同一节点原地展开
+ * （实测 273 → 1168 字，与 `/status/<id>` 详情页一致）。
+ *
+ * 必须同步、必须短：CDP `Runtime.evaluate` 有 5 秒硬超时，等待放在 Node 侧。
+ * 返回点击的按钮个数，0 表示这次没有长推文（或 X 改了 DOM）。
+ */
+export const EXPAND_SHOW_MORE_EXPRESSION = String.raw`(() => {
+  // 文案按小写比对，X 在不同语言下给的按钮文本是 Show more / 显示更多 / 顯示更多
+  const labels = ['Show more', '显示更多', '顯示更多'].map((l) => l.toLowerCase());
+  let clicked = 0;
+  for (const textEl of Array.from(document.querySelectorAll('div[data-testid="tweetText"]'))) {
+    const parent = textEl.parentElement;
+    if (!parent) {
+      continue;
+    }
+    for (const button of Array.from(parent.querySelectorAll('button[role="button"]'))) {
+      const label = (button.textContent || '').trim().toLowerCase();
+      if (labels.indexOf(label) === -1) {
+        continue;
+      }
+      button.click();
+      clicked += 1;
+    }
+  }
+  return clicked;
+})()`;
+
+/**
+ * 点开 Show more 之后等 X 重渲染。
+ *
+ * 实测点击后的下一次重渲染里 `textContent` 就变长（1.2s 足够），留到 1.5s 余量。
+ */
+export const SHOW_MORE_WAIT_MS = 1_500;
+
 /** 时间线地址。 */
 export const TIMELINE_URL = "https://x.com/home";
 
@@ -116,6 +155,8 @@ export interface TwitterFetchOptions {
   minTweets?: number;
   /** 等推文渲染出来的上限。 */
   waitMs?: number;
+  /** 展开后等待用的 sleep。测试注入以来跳过真实等待；缺省用模块内的 setTimeout。 */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -148,6 +189,23 @@ export async function fetchTwitterTimeline(options: TwitterFetchOptions): Promis
         // 滚动失败不致命：首屏通常已经有十几条
         break;
       }
+    }
+
+    // 长推文被 X 截断在 ~280 字：滚动之后、提取之前先点开 Show more（同步表达式，不等）
+    let expanded = 0;
+    try {
+      const value = await bridge.send(
+        "page.evaluate",
+        { expression: EXPAND_SHOW_MORE_EXPRESSION, targetId: tabId },
+        20_000,
+      );
+      expanded = typeof value === "number" ? value : 0;
+    } catch (error) {
+      // 展开失败不致命：按抓到的文本继续（退回截断版，不会更差）
+      logger.warn("twitter show more failed", { error: (error as Error).message });
+    }
+    if (expanded > 0) {
+      await (options.sleep ?? sleep)(SHOW_MORE_WAIT_MS);
     }
 
     const extracted = (await bridge.send(
