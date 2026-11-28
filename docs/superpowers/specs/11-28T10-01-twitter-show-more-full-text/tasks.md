@@ -10,3 +10,4 @@
 
 - 2.1 `bun test` 全绿；`bunx tsc --noEmit` 干净
 - 2.2 用真 Chrome 跑一次抓取（或对 `runs/2026-11-28/twitter_raw.txt` 里的截断条目复现：展开后该条正文显著变长），把实测字符数写进 worklog
+- 2.3 `package.json` patch +1（0.1.19 → 0.1.20），随本分支最后一个提交落下（AGENTS §14；评审 defer 要求登账）
