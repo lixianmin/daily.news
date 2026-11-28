@@ -1,0 +1,32 @@
+{
+	"maxWorkers": 3,
+	"scheduler": {
+		"maxWorkers": 3,
+		"running": [],
+		"queued": []
+	},
+	"tasks": [
+		{
+			"changeId": "11-25T20-18-zhihu-full-article",
+			"taskRef": "1",
+			"ledgerId": "t-hyk5ccnm",
+			"status": "failed",
+			"agentId": "89d348f4-d6a5-48ec-aa19-405632c7b4e1",
+			"workspaceId": "wks_beefefb7003ad953",
+			"worktree": "/Users/xmli/.paseo/worktrees/2vt8blp6/rainy-elk",
+			"legacy": false,
+			"base": "6897fc109b420a1e47ad49a4f65660ef5b483fc7",
+			"startedAt": "2026-11-25T12:20:39.584Z",
+			"endedAt": "2026-11-27T07:06:45.637Z",
+			"rounds": 1,
+			"priority": "P1",
+			"instructions": "按 docs/superpowers/specs/11-25T20-18-zhihu-full-article/spec.md 与 tasks.md 实现知乎正文全文。\n\n核心：\n1) 新增 src/chrome/zhihu.ts：fetchZhihuAnswer(url, {bridge?, minChars?, waitMs?}) → {ok:true,url,text} | {ok:false,reason}。复用 ChromeBridge（默认 ChromeBridge.connect()，可注入），tab.new 后台标签页 groupTitle \"daily.news\" → 每 1s 探到 .RichText 有内容（上限 15s）→ 一次 page.evaluate 取第一个答案 innerText（表达式要短，CDP 5s 硬超时）→ finally 里 tab.close。不抛错：桥连不上 / 超时 / 表达式为空 / 短于 200 字都返回 ok:false，失败打 warn 日志（带 url 与 reason）。\n2) src/zhihu.ts：ZhihuItem 加 fullText?；新增 expandZhihu(items, deps)（串行抓，采纳条件 text.length>=200 且 > excerpt.length，失败或没有 url 保留摘要片段，每条 info 日志，整批不抛错）；sourceText 优先用 fullText（标题 + 空行 + 全文）；buildZhihuSection 顺序 = expandZhihu → toBilingual → 组装；buildZhihuSectionFromRuns 透传 deps。\n3) 测试按 spec「验收」一节逐条写（假 bridge 记录 tab.new/page.evaluate/tab.close；假翻译器 + 假抓取的集成用例）。\n4) package.json 0.1.19 → 0.1.20。\n\n纪律：TDD（先写失败测试）；只动本单范围；不碰 foreman 仓库；不 merge / push / rebase / 删 worktree；不写模型总结顶替正文；提交前跑 `bun test` 与 `bunx tsc --noEmit` 全绿并贴退出码，然后写 .delivered 并汇报。",
+			"summary": "看门狗收尸：无活动 2561 分钟、探活 closed 已超 120 秒宽限",
+			"verdict": null,
+			"findings": "",
+			"reviewedHead": null,
+			"deliveryPaths": null
+		}
+	],
+	"handledNotifications": []
+}
