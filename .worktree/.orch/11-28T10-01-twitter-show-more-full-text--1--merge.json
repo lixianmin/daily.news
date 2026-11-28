@@ -1,0 +1,10 @@
+{
+	"key": "11-28T10-01-twitter-show-more-full-text--1",
+	"outcome": "merged",
+	"sha": "82b3db3",
+	"version": null,
+	"gateLine": "门禁：通过（全档）；完整日志：/Users/xmli/me/code/daily.news/logs/gates/11-28T10-01-twitter-show-more-full-text--1--merge--20261128-104633346-dc4980f6-pass.log（失败日志全留，成功日志保留最近 5 份，理由见 core/orch/gate-log-files.ts）",
+	"logPath": "/Users/xmli/me/code/daily.news/logs/gates/11-28T10-01-twitter-show-more-full-text--1--merge--20261128-104633346-dc4980f6-pass.log",
+	"finishedAt": "2026-11-28T02:46:44.538Z",
+	"text": "[orch] merge 11-28T10-01-twitter-show-more-full-text--1\n\n已合并：82b3db3\n已合并 11-28T10-01-twitter-show-more-full-text--1 到 main：落地门禁：全档（评审已降为快档（2026-11-21-orch-speed-parity）：全档门禁只在落地树跑这一次）；本次用时 11.1s；门禁：通过（全档）；完整日志：/Users/xmli/me/code/daily.news/logs/gates/11-28T10-01-twitter-show-more-full-text--1--merge--20261128-104633346-dc4980f6-pass.log（失败日志全留，成功日志保留最近 5 份，理由见 core/orch/gate-log-files.ts）；路径集：与评审记录一致（4 条）；workspace 保留，需要清理时手工 archive，归档后顺手 `git worktree prune`（锁 /Users/xmli/me/code/daily.news/.worktree/.orch/merge.lock 已释放，分支保留）\n⚠ 在飞 0 且本轮无单可派（台账没有 todo 条目）"
+}
