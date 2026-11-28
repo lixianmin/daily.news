@@ -1,7 +1,7 @@
 {
-	"maxWorkers": 3,
+	"maxWorkers": 5,
 	"scheduler": {
-		"maxWorkers": 3,
+		"maxWorkers": 5,
 		"running": [],
 		"queued": []
 	},
@@ -10,23 +10,93 @@
 			"changeId": "11-25T20-18-zhihu-full-article",
 			"taskRef": "1",
 			"ledgerId": "t-hyk5ccnm",
-			"status": "failed",
+			"status": "canceled",
 			"agentId": "89d348f4-d6a5-48ec-aa19-405632c7b4e1",
 			"workspaceId": "wks_beefefb7003ad953",
 			"worktree": "/Users/xmli/.paseo/worktrees/2vt8blp6/rainy-elk",
 			"legacy": false,
 			"base": "6897fc109b420a1e47ad49a4f65660ef5b483fc7",
-			"startedAt": "2026-11-25T12:20:39.584Z",
-			"endedAt": "2026-11-27T07:06:45.637Z",
-			"rounds": 1,
+			"startedAt": "2026-11-28T02:08:50.237Z",
+			"endedAt": "2026-11-28T02:41:53.578Z",
+			"rounds": 3,
 			"priority": "P1",
-			"instructions": "按 docs/superpowers/specs/11-25T20-18-zhihu-full-article/spec.md 与 tasks.md 实现知乎正文全文。\n\n核心：\n1) 新增 src/chrome/zhihu.ts：fetchZhihuAnswer(url, {bridge?, minChars?, waitMs?}) → {ok:true,url,text} | {ok:false,reason}。复用 ChromeBridge（默认 ChromeBridge.connect()，可注入），tab.new 后台标签页 groupTitle \"daily.news\" → 每 1s 探到 .RichText 有内容（上限 15s）→ 一次 page.evaluate 取第一个答案 innerText（表达式要短，CDP 5s 硬超时）→ finally 里 tab.close。不抛错：桥连不上 / 超时 / 表达式为空 / 短于 200 字都返回 ok:false，失败打 warn 日志（带 url 与 reason）。\n2) src/zhihu.ts：ZhihuItem 加 fullText?；新增 expandZhihu(items, deps)（串行抓，采纳条件 text.length>=200 且 > excerpt.length，失败或没有 url 保留摘要片段，每条 info 日志，整批不抛错）；sourceText 优先用 fullText（标题 + 空行 + 全文）；buildZhihuSection 顺序 = expandZhihu → toBilingual → 组装；buildZhihuSectionFromRuns 透传 deps。\n3) 测试按 spec「验收」一节逐条写（假 bridge 记录 tab.new/page.evaluate/tab.close；假翻译器 + 假抓取的集成用例）。\n4) package.json 0.1.19 → 0.1.20。\n\n纪律：TDD（先写失败测试）；只动本单范围；不碰 foreman 仓库；不 merge / push / rebase / 删 worktree；不写模型总结顶替正文；提交前跑 `bun test` 与 `bunx tsc --noEmit` 全绿并贴退出码，然后写 .delivered 并汇报。",
-			"summary": "看门狗收尸：无活动 2561 分钟、探活 closed 已超 120 秒宽限",
-			"verdict": null,
-			"findings": "",
-			"reviewedHead": null,
-			"deliveryPaths": null
+			"instructions": "第 3 轮返修（评审第 2 次 FAIL，全文 .worktree/.orch/11-25T20-18-zhihu-full-article--1--review.log）。blocking 1 + nit 1：\n\n1) src/chrome/zhihu.ts:86-89：新建 owner 桥在扩展下一次 `/next` 之前 `status().connected` 恒为 false（bridge.ts:150 只看 lastSeenAt，:295 才赋值），所以 17318 空着（07:00 常态）时会立刻 fail，功能等于没生效；单测替身 connected:true 把语义盖住了。改成**有界等待**：每 ~200ms 查一次 status()，最多 3~5s，等到 connected 才发 tab.new，等不到才 fail。等待期间先记一条 debug「等扩展轮询」；最终 fail 的事件文案才可写「Chrome 扩展没有在轮询」。\n\n2) 补用例：status() 首次 connected:false、随后 true，仍能取到全文；断言等待期间 calls 里没有 tab.new。\n\n3) 顺带（评审明确要求）：expandZhihu 默认路径改成**整批 connect 一次、末尾 stop 一次**，别让 12 条各自起停各握手一次（等待成本 ×12）。注入的桥仍然不 stop，单条 fetchZhihuAnswer 的注入路径保持现状。\n\n纪律同前：TDD，先写失败测试再实现；只动本单范围；不 merge / push / rebase / 删 worktree；提交前 `bun test` 与 `bunx tsc --noEmit` 全绿并贴退出码，然后写 .delivered 并汇报修了哪几条（含每条的用例名）。",
+			"summary": "DELIVERED\n\n做了什么：修第 2 轮评审的 blocking 1 与 nit 2，并按评审要求把 `expandZhihu` 默认路径改成整批 connect 一次、末尾 stop 一次。提交 `754c858`（本单三轮共 3 个 commit）。\n\n关键判断与理由：\n- 上一轮的方向性错误是误读了 `connected` 的语义：`bridge.ts` 里 `connected = lastSeenAt !== undefined`，而 `lastSeenAt` 只在扩展长轮询 `/next` 时赋值，所以新建 owner 桥在扩展来取命令前必然 `connected: false`。07:00 常态下 17318 空着 → 必然 owner 模式 → 上一轮的「立即判死」会让功能整体失效；旧单测替身硬编码 `connected: true` 正好把这条语义盖住了。\n- 新实现 `waitForExtension`：每 200ms 查一次 `status()`、上限 5s（新增 `extensionWaitMs` 选项供测试用短值），等到 `connected` 才发 `tab.new`，等不到才 `fail(\"Chrome 扩展没有在轮询\")`——此时这句才是观测到的事实。等待前先记 `logger.debug(\"zhihu waiting for extension\", { timeoutMs })`。\n- `expandZhihu` 默认路径 connect 一次 → 串行抓 → `finally` stop 一次（逐条起停每条都要重新等扩展轮询，等待成本 ×条目数）。注入 `fetchAnswer` 时不 connect、不 stop；单条 `fetchZhihuAnswer` 的注入路径不变。\n- connect 失败时打一条 `logger.warn` 后用「永远失败」的抓取函数走同一条串行流程，保证每条条目仍有一条 info 日志（含失败原因），整批不抛错。\n\n本轮对应用例：\n- blocking 1 + nit 2：`fetchZhihuAnswer > 新建 owner 桥时先有界等待扩展轮询，等到了才开标签页`（`status()` 前两次 false、第三次 true → 取到全文；断言 `statusCalls === 3`、`calls[0].action === \"tab.new\"`、`tab.new` 只发一次）；`fetchZhihuAnswer > 扩展没有在轮询时立刻失败，不开标签页（不白等 30s）`（`extensionWaitMs: 200`，断言 reason 与 `calls` 为空）。\n- 整批 connect/stop：`expandZhihu > 默认路径整批只 connect 一次、末尾 stop 一次`（`spyOn(ChromeBridge, \"connect\")`；两条条目 → `connects === 1`、`stops === 1`、两条都拿到 `fullText`）；`expandZhihu > 连不上桥时整批不抛错，正文仍是摘要片段`。\n\n门禁与测试：\n- `bun run test test/chrome/zhihu.test.ts test/zhihu.test.ts` → 30 pass / 0 fail，退出码 0\n- `bun test`（全档自查）→ 339 pass / 0 fail，退出码 0\n- `bunx tsc --noEmit` → 退出码 0\n- `bunx prettier --check <worklog>` → 通过（已先 `--write` 再提交）\n\n风险 / 未做的事 / 需要人类决定的点：\n- 仍未在真机 Chrome 上验证真实知乎页面（`.List-item .RichText` 选择器、第一个答案的渲染）与真实扩展握手时序；5s 上限按「扩展一般 1s 内来取」的经验值设定，若机器休眠/扩展被禁用会走超时分支退回摘要片段。\n- 交付路径：`git diff main HEAD` 只含 `src/chrome/zhihu.ts`、`src/zhihu.ts`、两份测试、`package.json`、本单 worklog；未碰 `tasks.md`、未碰别的 change 目录。\n- 未 merge / push / rebase（main 已前进过，rebase 交 merge 环节）。",
+			"verdict": "FAIL",
+			"findings": "路径核对：6 条交付路径（worklog 本单、`package.json` 版本号、`src/chrome/zhihu.ts`、`src/zhihu.ts`、两份测试）逐条对过 spec §1/§2/§3，均在范围内；`tasks.md` 与其它 change 目录未动，无越界。\n\nworklog 的 `## nit` 一节已记，第 2 轮两条 nit（`sleep(Math.min(...))`、`tab.close` 失败记 warn）与代码逐处核对一致。\n\n### blocking\n\n1. in-spec / DESIGN: `src/chrome/zhihu.ts:25-28`（`ANSWER_EXPRESSION` 的兜底选择器）+ `src/chrome/zhihu.ts:170-184`（`waitForAnswer` 的「非空即返回」判据），spec §1 的「每 1s 探一次表达式返回是否非空」同一处 — 两个缺陷叠在一起：① 答案列表由 JS 渲染、问题描述（`.QuestionRichText .RichText`）在 SSR 的首屏 HTML 里就有，所以答案未渲染时兜底 `document.querySelector('.RichText')` 首个命中的就是问题描述；② `waitForAnswer` 拿到第一个非空文本就返回，随后 `src/chrome/zhihu.ts:118` 判 `MIN_ANSWER_CHARS` 直接 `fail` 整条——于是「长描述（≥200 字且比摘要长）→ 问题描述被当答案全文落进成品」「短描述（非空但 <200 字）→ 15s 等待预算一秒没用就判死，答案本来下一秒就渲染好」。`test/chrome/zhihu.test.ts:66` 那条用例只断言表达式含 `.RichText` / `innerText`，抓不住这一层。修法：表达式只认 `.List-item .RichText`（删掉兜底，探不到就是「还没渲染」），等待判据改成「文本长度 ≥ `max(minChars, excerpt.length + 1)` 才返回，否则继续等到 `waitMs` 用尽」，spec §1 那两行与验收用例同步改。\n\n### nit\n\n2. nit: `src/zhihu.ts:161-181`（`expandZhihu` 默认路径）— 整批只 connect/stop 一次，但 `fetchZhihuAnswer` 仍逐条 `waitForExtension`：Chrome 没开时（spec 认定的常态路径）每条白等 5s，10 条约 50s 仍在。worklog 第 3 轮把理由写成「否则每条都要重新等一次扩展轮询」，与实现差一截；把等待提到 `expandZhihu` 层判一次更贴合写法。\n\n3. nit: `src/chrome/zhihu.ts:63`（`extensionWaitMs`）— spec §1 的函数签名只有 `bridge` / `minChars` / `waitMs`，这个纯测试口子是额外参数，在 spec 里补一句说明（或让失败用例复用 `waitMs`）。\n\n4. nit: `test/chrome/zhihu.test.ts:162` — 用例名「扩展没有在轮询时立刻失败，不开标签页（不白等 30s）」实际等满 `extensionWaitMs: 200` 才失败，名字与断言不符。\n\n5. nit: `src/chrome/zhihu.ts:186-196`（`readAnswer` 的 10s 超时）— 单次探测可阻塞 10s，多轮叠加会越过 `waitMs`（15s 上限实际能跑到 ~21s），`DEFAULT_WAIT_MS` 的「等答案渲染的上限」注释口径不准。\n\nVERDICT: FAIL",
+			"reviewedHead": "754c858382009414fb81c9ab67f4591eabd39942",
+			"roundSignal": {
+				"envRound": false,
+				"envRoundReason": null,
+				"contentRounds": 3,
+				"mustPaths": [
+					"src/chrome/zhihu.ts"
+				],
+				"mustKinds": [
+					"DESIGN"
+				],
+				"repeatPaths": [
+					"src/chrome/zhihu.ts"
+				],
+				"repeatStreak": 2
+			},
+			"treeSha": "754c5969877218657e9d2f386a89092f7afaf7c0",
+			"deliveryFingerprint": "59ac7a54a0f0b2c0",
+			"deliveryPaths": [
+				"docs/superpowers/specs/11-25T20-18-zhihu-full-article/worklog-11-25T20-18-zhihu-full-article--1.md",
+				"package.json",
+				"src/chrome/zhihu.ts",
+				"src/zhihu.ts",
+				"test/chrome/zhihu.test.ts",
+				"test/zhihu.test.ts"
+			],
+			"reviewedTargetSha": "5639d16d5d900d1f030550ea11cd584dfeaf4440",
+			"reviewedAdvanced": 2,
+			"reviewedFingerprint": "59ac7a54a0f0b2c0",
+			"reviewedFingerprintBefore": "59ac7a54a0f0b2c0"
+		},
+		{
+			"changeId": "11-28T10-01-twitter-show-more-full-text",
+			"taskRef": "1",
+			"ledgerId": "t-rd0rrejs",
+			"status": "reviewed",
+			"agentId": "66b660be-079a-444b-b54a-f9b35e2d7801",
+			"workspaceId": "wks_508fceddbfad5cd8",
+			"worktree": "/Users/xmli/.paseo/worktrees/2vt8blp6/immense-pug",
+			"legacy": false,
+			"base": "5639d16d5d900d1f030550ea11cd584dfeaf4440",
+			"startedAt": "2026-11-28T02:42:36.486Z",
+			"endedAt": "2026-11-28T02:45:00.245Z",
+			"rounds": 2,
+			"priority": "P1",
+			"instructions": "返修（评审 PASS，只因版本号 defer）：在 worktree 里把 package.json 的 version 从 0.1.19 改成 0.1.20（AGENTS §14，tasks.md「交付前」已由编排者补了 2.3 条，不要改 tasks.md），跑 bun test 与 bunx tsc --noEmit，全绿后提交（提交信息写清是按 §14 补 bump），不要 merge、不要 push。",
+			"summary": "DELIVERED\n\n做了什么：`package.json` version `0.1.19` → `0.1.20`（AGENTS §14），worklog 追加第 2 轮记录 + `## nit` 登账 + rebase 记录；无代码改动。\n\n关键判断与理由：\n- 只有一条 defer（版本号），就只做 patch +1，不带任何顺带改动；未碰 `tasks.md` / `spec.md`。\n- 三条 nit 按纪律不修：nit 3（成功路径补日志）只在 worklog 里建议编排者决定是否另开单。\n- rebase 后 worklog 里引用的上一轮 sha `17d3f2d` 会失效，用**末尾追加**的 `## rebase 记录` 说明新旧关系（没有回头改上面已写的字）。\n\n门禁与测试：\n- `bun test` → 319 pass / 0 fail，exit 0（25 文件 / 661 断言）\n- `bunx tsc --noEmit` → exit 0\n- `bun run test test/chrome/twitter.test.ts` → 14 pass / 0 fail\n- worklog 先过 `bunx prettier --write`（只删掉尾部空行），`prettier --check` 通过后才写出 `.delivered`\n\n交付状态：\n- 分支 `task/11-28T10-01-twitter-show-more-full-text/1`，HEAD `51251c9`（`chore(release): 按 AGENTS §14 补 patch bump 0.1.19 → 0.1.20`），`.delivered` = `51251c9`\n- `git diff main --stat` 只有本单四个文件：worklog、`package.json`、`src/chrome/twitter.ts`、`test/chrome/twitter.test.ts`\n- 已 `git fetch . main && git rebase main`（main 前进 4 个 docs 提交，无冲突），未 merge、未 push\n\n风险 / 未做的事：\n- nit 4（展开成功路径打一条带 `expanded` 的 info）未修，按 nit 纪律留给编排者定夺。\n- `.pi/APPEND_SYSTEM.md` 仍是未跟踪副本，未动（provisioning 产物）。",
+			"verdict": "PASS",
+			"findings": "## 核对结论\n\n改动路径逐条核对：worklog（本单交付物）、`package.json`（tasks 2.3 / AGENTS §14 的 patch +1，0.1.19 → 0.1.20）、`src/chrome/twitter.ts` 与 `test/chrome/twitter.test.ts`（本单功能与测试）。未触碰任何 `tasks.md`、其它 change 目录或别人的写域；`spec.md` / `tasks.md` 由编排者写，交付没碰。无路径越界。\n\n实现层面按 spec 核过一遍：展开放在「滚动后、提取前」，同步表达式不在页面内 `await`（避开 CDP 5s 硬超时），返回 0 不等待、抛错只 warn 且仍继续提取并 `tab.close`，三条行为都有对应断言；`sleep` 注入只影响新加的等待，`waitForTweets` 仍走模块内 `sleep`，无行为漂移。测试的调用序断言（`tab.new → count → scroll×2 → expand → extract → tab.close`）能真抓住顺序错位。\n\n### nit\n\n1. nit: `src/chrome/twitter.ts`:158 — `测试注入以来跳过真实等待` 是错字（应为「注入以跳过」）。\n2. nit: `worklog-...--1.md`:60 — 「没做成的事」写 `nit 4（展开成功路径补日志）`，而 `## nit` 里同一条是第 3 条，编号自相矛盾；回填时对齐编号即可。\n3. nit: `worklog-...--1.md`:76 — 第 2 轮的「交付 HEAD 短 sha」仍是「见 `.delivered`」没给具体值，与上一轮同类；另外「返回 0（X 改 DOM）」这条路径也完全无日志，spec 风险节写的「日志可查」只覆盖抛错路径，这一条与 `## nit` 第 3 条同源，已记，不另立账。\n\nVERDICT: PASS",
+			"reviewedHead": "51251c9a9e410b21cf102b031e24d93c5e53d04b",
+			"roundSignal": {
+				"envRound": false,
+				"envRoundReason": null,
+				"contentRounds": 2,
+				"mustPaths": [],
+				"mustKinds": [],
+				"repeatPaths": [],
+				"repeatStreak": 0
+			},
+			"treeSha": "46cf61d6a49005d1c0a949cbaa8cbbf49ae7d4a2",
+			"deliveryFingerprint": "0db9030acbaa55e6",
+			"deliveryPaths": [
+				"docs/superpowers/specs/11-28T10-01-twitter-show-more-full-text/worklog-11-28T10-01-twitter-show-more-full-text--1.md",
+				"package.json",
+				"src/chrome/twitter.ts",
+				"test/chrome/twitter.test.ts"
+			]
 		}
 	],
-	"handledNotifications": []
+	"handledNotifications": [
+		"ba7373da-ea10-42d9-990f-54754a76d8c8",
+		"1d50e878-66a8-4667-816d-1d491fe6a038",
+		"291c4598-82ed-46f7-945d-cee841e05541",
+		"5c2d1cca-1360-4f81-8b4e-784988047496"
+	]
 }
